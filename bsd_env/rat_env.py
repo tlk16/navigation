@@ -228,14 +228,11 @@ class RatEnv():
         if bar != None:
             ctrl.setup.world.obstacles.append([float(bar[0]), float(bar[1])])  # obstacles' number, width
         if goal != None:  # [4,5,2]
-            center_x = float(goal[0])
-            center_y = float(goal[1])
-            radius = float(goal[2])
-            region_x = range(int(center_x - radius), int(center_x + radius + 1))
-            region_y = range(int(center_y - radius), int(center_y + radius + 1))
-            for m in region_x:
-                for n in region_y:
-                    ctrl.setup.world.goals.append([m, n])  # x, y
+            for single_goal in goal:
+                center_x = float(single_goal[0])
+                center_y = float(single_goal[1])
+                radius = float(single_goal[2])
+                ctrl.setup.world.goals.append([center_x, center_y, radius])  # x, y, r
         if limit != None:  # 1000
             ctrl.config.limit = float(limit)
             ctrl.options.show_progress = True
@@ -282,8 +279,10 @@ class RatEnv():
     def _count_reward(self, pos):
         if len(ctrl.setup.world.goals) != 0:
             for g in ctrl.setup.world.goals:
-                # print(np.abs(pos - g))
-                if np.sqrt(np.sum(np.square(np.abs(pos - g)))) <= 1:
+                g_pos = g[0:2]
+                g_r = g[2]
+                # print('goal_dis', np.sqrt(np.sum(np.square(np.abs(pos - g_pos)))))
+                if np.sqrt(np.sum(np.square(np.abs(pos - g_pos)))) <= g_r:
                     reward = 1
                     return reward
                 else:
@@ -462,11 +461,11 @@ class RatEnv():
 
 
 if __name__ == '__main__':
-    ratenv = RatEnv(dim = [50,50,100], speed = 1., goal=[30,29,0], limit = 100, wall_offset=2., touch_offset=3.)
+    ratenv = RatEnv(dim = [50,50,100], speed = 1., goal=[[30,29,9]], limit = 100, wall_offset=2., touch_offset=3.)
     for i in range(200):
         print(ctrl.setup.world.goals)
         # print(i)
-        ratenv.reset(random=False, pos=np.array([28, 28]))
+        ratenv.reset(random=False, pos=np.array([20, 20]))
         done = False
         while not done:
             # print(ctrl.setup.world.goals)
