@@ -32,7 +32,8 @@ class Rat():
 
     def int2angle(self, action):
         angle = action * math.pi / 4
-        return np.array([math.cos(angle), math.sin(angle)])
+        return np.array([np.sign(math.cos(angle)), np.sign(math.sin(angle))])
+        # return np.array([math.cos(angle), math.sin(angle)])
 
     def _initAction(self):
         return random.randint(0, 7)
@@ -84,20 +85,19 @@ class Rat():
     def train(self, lr_rate=1e-6):
         Optimizer_q = torch.optim.Adam(
             [
-                # {'params': self.net.i2h, 'lr': lr_rate, 'weight_decay': 0},
-                # {'params': self.net.a2h, 'lr': lr_rate, 'weight_decay': 0},
-                # {'params': self.net.h2h, 'lr': lr_rate, 'weight_decay': 0},
-                # {'params': self.net.bh, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.i2h, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.a2h, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.h2h, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.bh, 'lr': lr_rate, 'weight_decay': 0},
                 {'params': self.net.h2o, 'lr': lr_rate, 'weight_decay': 0},
                 {'params': self.net.bo, 'lr': lr_rate, 'weight_decay': 0},
-                # {'params': self.net.r, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.r, 'lr': lr_rate, 'weight_decay': 0},
             ]
         )
 
         # Optimizer_q.zero_grad()
         for sequence in self.memory:
             Optimizer_q.zero_grad()
-            self.net.zero_grad()
             q_predicts = self.net.forward_sequence_values(
                 torch.from_numpy(np.array(sequence['touches'])).float(),
                 sequence['hidden0'],
@@ -150,7 +150,7 @@ class Session:
     def __init__(self):
         self.rat = Rat()
         self.env = rat_env.RatEnv(dim=[30, 30, 100], speed=1.,
-                                  goal=[10, 10, 1], limit=200,
+                                  goal=[[10, 10, 4]], limit=100,
                                   wall_offset=1., touch_offset=2.)
 
     def reset_body(self):
@@ -161,7 +161,7 @@ class Session:
 
         for _ in range(epochs):
             self.rat.reset()
-            state, reward, done, info = self.env.reset(random=False, pos=np.array([15, 15]))
+            state, reward, done, info = self.env.reset(random=False, pos=np.array([20, 20]))
             self.rat.remember(state, reward, self.rat.action0, done)
             done = False
 
@@ -171,6 +171,7 @@ class Session:
                 self.rat.remember(state, reward, action, done)
                 # print(self.rat.num_step, state[0], state[2], self.rat.int2angle(action))
             print('running reward', reward)
+            # print(self.rat.memory)
 
     def experiment(self, eposilon):
         # initialize, might take data during test
@@ -180,9 +181,22 @@ class Session:
 
 
 if __name__ == '__main__':
+    # parameters
+    # q-learning lamda discount alpha
+    # memory size
+    # lr_rate
+    # epsilon
+    # trained parameters
+    # env limit dim goal
+
     n_train = 100
     session = Session()
     for i in range(n_train):
+        print('training')
         session.experiment(eposilon=0.5)
         print('testing')
-        session.episode(epsilon=0.)
+        session.episode(epochs=1, epsilon=0.)
+
+
+    # try to train in int-grid situation
+    # memory a_t-1, s_t, r_t,
