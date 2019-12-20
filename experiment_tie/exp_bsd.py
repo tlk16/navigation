@@ -9,6 +9,7 @@ import torch.utils.data
 
 from RNN import RNN
 import bsd_env.rat_env as rat_env
+from matplotlib import pyplot as plt
 
 
 class Rat():
@@ -20,6 +21,7 @@ class Rat():
         self.hidden_state = self.net.initHidden()
         self.action0 = self._initAction()
         self.sequence = None
+        self.losses = []
 
     def _epsilon_choose_action(self, q_value, epsilon=0.2):
         if random.random() > epsilon:
@@ -85,17 +87,18 @@ class Rat():
     def train(self, lr_rate=1e-6):
         Optimizer_q = torch.optim.Adam(
             [
-                {'params': self.net.i2h, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.a2h, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.h2h, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.bh, 'lr': lr_rate, 'weight_decay': 0},
+                # {'params': self.net.i2h, 'lr': lr_rate, 'weight_decay': 0},
+                # {'params': self.net.a2h, 'lr': lr_rate, 'weight_decay': 0},
+                # {'params': self.net.h2h, 'lr': lr_rate, 'weight_decay': 0},
+                # {'params': self.net.bh, 'lr': lr_rate, 'weight_decay': 0},
                 {'params': self.net.h2o, 'lr': lr_rate, 'weight_decay': 0},
                 {'params': self.net.bo, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.r, 'lr': lr_rate, 'weight_decay': 0},
+                # {'params': self.net.r, 'lr': lr_rate, 'weight_decay': 0},
             ]
         )
 
         # Optimizer_q.zero_grad()
+        loss_all = []
         for sequence in self.memory:
             Optimizer_q.zero_grad()
             q_predicts = self.net.forward_sequence_values(
@@ -111,7 +114,11 @@ class Rat():
                 loss_q = torch.mean((torch.stack(q_predicts[:-1]) - torch.stack(Qs).detach()) ** 2)
                 loss_q.backward()
                 print('loss', loss_q * 1000)
+                loss_all.append(loss_q.detach().item())
+            # for para in self.net.parameters():
+            #     print(para.grad)
             Optimizer_q.step()
+        self.losses.append(np.array(loss_all).mean())
 
     def value_backward(self, Predicts, Actions, Rewards):
         """
@@ -126,7 +133,7 @@ class Rat():
         Qs = []
         self.discount = 0.99
         self.lam = 0.9
-        self.alpha = 0.2
+        self.alpha = 0.5
         # print('q_pre', len(Predicts), Predicts)
         for Q_now, Q_next, action, reward \
                 in zip(Predicts[:-1], Predicts[1:], Actions[1:], Rewards):
@@ -142,7 +149,6 @@ class Rat():
                 q[0, action] = q[0, action] + self.alpha * delta * e
                 return q
             Qs = [f(e, delta, q) for e, q in zip(trace, Qs)]
-        # print('QS', len(Qs), Qs)
         return Qs
 
 
@@ -196,6 +202,8 @@ if __name__ == '__main__':
         session.experiment(eposilon=0.5)
         print('testing')
         session.episode(epochs=1, epsilon=0.)
+        plt.plot(session.rat.losses)
+        plt.show()
 
 
     # try to train in int-grid situation
