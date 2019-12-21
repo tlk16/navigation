@@ -17,10 +17,10 @@ from OpenGL.GL   import *
 
 # utilities
 sys.path.append( './util' )
-from util.setup import *
-import world
-import ratbot
-import opengl_text as text
+from environment.util.setup import *
+import environment.util.world
+import environment.util.ratbot
+import environment.util.opengl_text as text
 
 
 #--------------------------------------------------------------------[ control ]

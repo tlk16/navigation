@@ -4,17 +4,16 @@ import sys
 # math
 import math
 import numpy  as np
-np.random.seed(3)
+# np.random.seed(3)
 import random as rnd
-rnd.seed(3)
+# rnd.seed(3)
 # OpenGL
 from OpenGL.GLUT import *
 from OpenGL.GLU  import *
 from OpenGL.GL   import *
 
 # utilities / own
-import freezeable
-Freezeable = freezeable.Freezeable
+from environment.util.freezeable import Freezeable
 
 #------------------------------------------------------------------[ Constants ]
 

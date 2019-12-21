@@ -1,8 +1,7 @@
 import sys
 import math
 import numpy
-import freezeable
-Freezeable = freezeable.Freezeable
+from environment.util.freezeable import Freezeable
 
 class EmptyOptionContainer( Freezeable ):
     def __init__( self ):

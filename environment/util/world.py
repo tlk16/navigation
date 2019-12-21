@@ -10,17 +10,17 @@ from PIL import Image as img
 # math
 import math
 import numpy
-numpy.random.seed(3)
+# numpy.random.seed(3)
 import random as rnd
-rnd.seed(3)
+# rnd.seed(3)
 # OpenGL
 from OpenGL.GLUT import *
 from OpenGL.GLU  import *
 from OpenGL.GL   import *
 
 # utilities / own
-from util.setup import *
-from opengl_text import *
+from environment.util.setup import *
+from environment.util.opengl_text import *
 
 #defines
 def_MARKER_HEIGHT =   0.1  # default height of drawn debug markers
