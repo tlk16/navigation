@@ -13,17 +13,30 @@ from matplotlib import pyplot as plt
 
 
 class Rat():
-    def __init__(self):
+    """
+    agent reset, (act, remember), train
+    """
+
+    def __init__(self, memory_size=50):
         self.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=8)
         self.memory = []
+        self.memory_size = memory_size
 
         self.num_step = 0
+        self.epsilon = 0.5
         self.hidden_state = self.net.initHidden()
         self.action0 = self._initAction()
         self.sequence = None
+        self.phase = 'train'
         self.losses = []
 
     def _epsilon_choose_action(self, q_value, epsilon=0.2):
+        """
+        epsilon-greedy choose action according to q_value
+        :param q_value: tensor, size=[1,8]
+        :param epsilon: the degree of greed, float 0~1
+        :return: acion, int
+        """
         if random.random() > epsilon:
             return self._greedy_choose_action(q_value)
 
@@ -33,16 +46,24 @@ class Rat():
         return torch.argmax(q_value).item()
 
     def int2angle(self, action):
+        """
+
+        :param action: action, int
+        :return: action vector, np.array
+        """
+
         angle = action * math.pi / 4
-        return np.array([np.sign(math.cos(angle)), np.sign(math.sin(angle))])
-        # return np.array([math.cos(angle), math.sin(angle)])
+        # return np.array([np.sign(math.cos(angle)), np.sign(math.sin(angle))])
+        return np.array([math.cos(angle), math.sin(angle)])
 
     def _initAction(self):
         return random.randint(0, 7)
 
-    def act(self, state, epsilon):
+    def act(self, state):
         """
-        state[2]: array or list shape=[4,]
+        give action(int) accoring to state
+        :param state: state[2]: array or list shape=[4,]
+        :return:
         """
         with torch.no_grad():
             touch = state[2]
@@ -52,17 +73,20 @@ class Rat():
             output, self.hidden_state = self.net(touch, self.hidden_state, last_action)
             # output.shape = [1,8] self.hidden_state.shape = [1,512]
         self.num_step += 1
-        return self._epsilon_choose_action(output, epsilon)
+        if self.phase == 'train':
+            return self._epsilon_choose_action(output, epsilon=self.epsilon)
+        return self._greedy_choose_action(output)
 
-    def reset(self, init_net=True):
+    def reset(self, init_net=True, phase='train'):
         """
-        reset hidden_state, nump_step and sequence
+        reset hidden_state, phase, nump_step and sequence
         """
 
         if init_net:
             self.hidden_state = self.net.initHidden()
 
         self.num_step = 0
+        self.phase = phase
         self.sequence = {
             'hidden0': self.hidden_state,
             'positions': [],
@@ -81,7 +105,7 @@ class Rat():
         self.sequence['actions'].append(action)
         if done:
             self.memory.append(self.sequence)
-        if len(self.memory) > 20:
+        if len(self.memory) > self.memory_size:
             del self.memory[0]
 
     def train(self, lr_rate=1e-6):
@@ -114,7 +138,7 @@ class Rat():
                 loss_q = torch.mean((torch.stack(q_predicts[:-1]) - torch.stack(Qs).detach()) ** 2)
                 loss_q.backward()
                 print('loss', loss_q * 1000)
-                loss_all.append(loss_q.detach().item())
+                loss_all.append(10 * loss_q.detach().item())
             # for para in self.net.parameters():
             #     print(para.grad)
             Optimizer_q.step()
@@ -133,7 +157,7 @@ class Rat():
         Qs = []
         self.discount = 0.99
         self.lam = 0.9
-        self.alpha = 0.5
+        self.alpha = 0.2
         # print('q_pre', len(Predicts), Predicts)
         for Q_now, Q_next, action, reward \
                 in zip(Predicts[:-1], Predicts[1:], Actions[1:], Rewards):
@@ -153,36 +177,45 @@ class Rat():
 
 
 class Session:
-    def __init__(self):
-        self.rat = Rat()
-        self.env = RatEnv(dim=[30, 30, 100], speed=1.,
-                                  goal=[10, 10, 4], limit=100,
-                                  wall_offset=1., touch_offset=2.)
+    def __init__(self, rat, env):
+        self.rat = rat
+        self.env = env
+        self.phase = 'train'
+        self.rewards = {'train':[], 'test':[]}
+        self.mean_rewards = {'train':[], 'test':[]}
 
     def reset_body(self):
         self.env.reset()             # pos or random
         self.rat.reset()
 
-    def episode(self, epochs=10, epsilon=0.):
+    def episode(self, epochs=10):
 
-        for _ in range(epochs):
-            self.rat.reset()
-            state, reward, done, info = self.env.reset()
+        for epoch in range(epochs):
+            self.rat.reset(self.phase)
+            state, reward, done, step = self.env.reset()
             self.rat.remember(state, reward, self.rat.action0, done)
-            done = False
 
             while not done:
-                action = self.rat.act(state, epsilon=epsilon)
-                state, reward, done, info = self.env.step(self.rat.int2angle(action))
-                self.rat.remember(state, reward, action, done)
-                # print(self.rat.num_step, state[0], state[2], self.rat.int2angle(action))
-            print('running reward', reward)
-            # print(self.rat.memory)
+                action = self.rat.act(state)
+                state, reward, done, step = self.env.step(self.rat.int2angle(action))
+                if self.phase == 'train':
+                    self.rat.remember(state, reward, action, done)
+                # print(self.rat.num_step, self.rat.int2angle(action), state[0], state[2], step)
+            print(self.phase, epoch, 'running reward', reward)
+            self.rewards[self.phase].append(reward)
 
-    def experiment(self, eposilon):
+        self.mean_rewards[self.phase].append(np.array(self.rewards[self.phase]).mean())
+        self.rewards = {'train': [], 'test': []}
+
+    def experiment(self, epochs=10):
         # initialize, might take data during test
-        self.episode(epochs=10, epsilon=eposilon)
-        self.rat.train()
+        if self.phase == 'train':
+            self.episode(epochs)
+            self.rat.train()
+        elif self.phase == 'test':
+            self.episode(epochs)
+        else:
+            print('wrong phase')
 
 
 
@@ -195,15 +228,29 @@ if __name__ == '__main__':
     # trained parameters
     # env limit dim goal
 
-    n_train = 100
-    session = Session()
+    n_train = 1000
+    rat = Rat(memory_size=100)
+    env = RatEnv(dim=[30, 30, 100], speed=1., goal=[10, 10, 2], limit=100, wall_offset=1., touch_offset=2.)
+    session = Session(rat, env)
     for i in range(n_train):
-        print('training')
-        session.experiment(eposilon=0.5)
-        print('testing')
-        session.episode(epochs=1, epsilon=0.)
-        plt.plot(session.rat.losses)
-        plt.show()
+        rat.epsilon = 0.5 - i * 0.002 if i < 200 else 0.1
+
+        session.phase = 'train'
+        session.experiment(epochs=10)
+
+        session.phase = 'test'
+        session.experiment(epochs=10)
+
+        if i % 10 == 0:
+            plt.figure()
+            line1, = plt.plot(session.rat.losses, label='loss')
+            line2, = plt.plot(session.mean_rewards['train'], label='train')
+            line3, = plt.plot(session.mean_rewards['test'], label='test')
+            plt.legend(handles=[line1, line2, line3])
+            plt.savefig(str(i) + '.png')
+            plt.ion()
+            plt.pause(5)
+            plt.close()
 
 
     # try to train in int-grid situation
