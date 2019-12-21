@@ -16,6 +16,7 @@ sys.path.append( './util' )
 from environment.util.setup import *
 import environment.util.world as world
 import environment.util.ratbot as ratbot
+import environment.ratlab as ratlab
 import RNN
 import torch
 

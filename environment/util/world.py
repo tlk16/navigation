@@ -90,11 +90,13 @@ class Textures:
         self.crate  = []
         self.skybox = None
         # find available textures
-        tex_list = os.listdir( './textures' )
+        tex_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'textures')
+        tex_list = os.listdir(tex_dir)
+        # tex_list = os.listdir( './textures' )
         tex_list.sort()
         for f in tex_list:
             s = f.split( '.' )[0]
-            i = self.load( 'textures/'+f )
+            i = self.load( os.path.join(tex_dir, f ))
             # add to category
             if   'floor'  in s: self.floor.append( i )
             elif 'wall'   in s: self.wall.append ( i )

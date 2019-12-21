@@ -8,7 +8,7 @@ import torch
 import torch.utils.data
 
 from RNN import RNN
-import bsd_env.rat_env as rat_env
+from environment import RatEnv
 from matplotlib import pyplot as plt
 
 
@@ -155,19 +155,19 @@ class Rat():
 class Session:
     def __init__(self):
         self.rat = Rat()
-        self.env = rat_env.RatEnv(dim=[30, 30, 100], speed=1.,
-                                  goal=[[10, 10, 4]], limit=100,
+        self.env = RatEnv(dim=[30, 30, 100], speed=1.,
+                                  goal=[10, 10, 4], limit=100,
                                   wall_offset=1., touch_offset=2.)
 
     def reset_body(self):
-        self.env.reset(random=False, pos=np.array([20, 20]))             # pos or random
+        self.env.reset()             # pos or random
         self.rat.reset()
 
     def episode(self, epochs=10, epsilon=0.):
 
         for _ in range(epochs):
             self.rat.reset()
-            state, reward, done, info = self.env.reset(random=False, pos=np.array([20, 20]))
+            state, reward, done, info = self.env.reset()
             self.rat.remember(state, reward, self.rat.action0, done)
             done = False
 
