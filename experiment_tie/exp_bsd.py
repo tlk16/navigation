@@ -17,10 +17,20 @@ class Rat():
     agent reset, (act, remember), train
     """
 
-    def __init__(self, memory_size=50):
-        self.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=8)
+    def __init__(self, memory_size=50, input_type='touch', train_paras='two'):
+        if input_type == 'touch':
+            self.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=8)
+        if input_type == 'pos':
+            self.net = RNN(input_size=2, action_size=2, hidden_size=512, output_size=8)
+        self.input_type = input_type
+        self.train_paras = train_paras
+
         self.memory = []
         self.memory_size = memory_size
+
+        self.discount = 0.99
+        self.lam = 0.9
+        self.alpha = 0.2
 
         self.num_step = 0
         self.epsilon = 0.5
@@ -65,17 +75,32 @@ class Rat():
         :param state: state[2]: array or list shape=[4,]
         :return:
         """
-        with torch.no_grad():
-            touch = state[2]
-            touch = torch.from_numpy(touch).float()
-            # touch.shape = [4,]
-            last_action = torch.from_numpy(self.int2angle(self.sequence['actions'][-1])).float()
-            output, self.hidden_state = self.net(touch, self.hidden_state, last_action)
-            # output.shape = [1,8] self.hidden_state.shape = [1,512]
-        self.num_step += 1
-        if self.phase == 'train':
-            return self._epsilon_choose_action(output, epsilon=self.epsilon)
-        return self._greedy_choose_action(output)
+        if self.input_type == 'touch':
+            with torch.no_grad():
+                touch = state[2]
+                touch = torch.from_numpy(touch).float()
+                # touch.shape = [4,]
+                last_action = torch.from_numpy(self.int2angle(self.sequence['actions'][-1])).float()
+                output, self.hidden_state = self.net(touch, self.hidden_state, last_action)
+                # output.shape = [1,8] self.hidden_state.shape = [1,512]
+            self.num_step += 1
+            if self.phase == 'train':
+                return self._epsilon_choose_action(output, epsilon=self.epsilon)
+            return self._greedy_choose_action(output)
+        elif self.input_type == 'pos':
+            with torch.no_grad():
+                pos = state[0]
+                pos = torch.from_numpy(pos).float()
+                # touch.shape = [4,]
+                last_action = torch.from_numpy(self.int2angle(self.sequence['actions'][-1])).float()
+                output, self.hidden_state = self.net(pos, self.hidden_state, last_action)
+                # output.shape = [1,8] self.hidden_state.shape = [1,512]
+            self.num_step += 1
+            if self.phase == 'train':
+                return self._epsilon_choose_action(output, epsilon=self.epsilon)
+            return self._greedy_choose_action(output)
+        else:
+            print('input_size wrong')
 
     def reset(self, init_net=True, phase='train'):
         """
@@ -109,24 +134,46 @@ class Rat():
             del self.memory[0]
 
     def train(self, lr_rate=1e-6):
-        Optimizer_q = torch.optim.Adam(
-            [
-                # {'params': self.net.i2h, 'lr': lr_rate, 'weight_decay': 0},
-                # {'params': self.net.a2h, 'lr': lr_rate, 'weight_decay': 0},
-                # {'params': self.net.h2h, 'lr': lr_rate, 'weight_decay': 0},
-                # {'params': self.net.bh, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.h2o, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.bo, 'lr': lr_rate, 'weight_decay': 0},
-                # {'params': self.net.r, 'lr': lr_rate, 'weight_decay': 0},
-            ]
-        )
+        if self.train_paras == 'two':
+            Optimizer_q = torch.optim.Adam(
+                [
+                    # {'params': self.net.i2h, 'lr': lr_rate, 'weight_decay': 0},
+                    # {'params': self.net.a2h, 'lr': lr_rate, 'weight_decay': 0},
+                    # {'params': self.net.h2h, 'lr': lr_rate, 'weight_decay': 0},
+                    # {'params': self.net.bh, 'lr': lr_rate, 'weight_decay': 0},
+                    {'params': self.net.h2o, 'lr': lr_rate, 'weight_decay': 0},
+                    {'params': self.net.bo, 'lr': lr_rate, 'weight_decay': 0},
+                    # {'params': self.net.r, 'lr': lr_rate, 'weight_decay': 0},
+                ]
+            )
+        elif self.train_paras == 'all':
+            Optimizer_q = torch.optim.Adam(
+                [
+                    {'params': self.net.i2h, 'lr': lr_rate, 'weight_decay': 0},
+                    {'params': self.net.a2h, 'lr': lr_rate, 'weight_decay': 0},
+                    {'params': self.net.h2h, 'lr': lr_rate, 'weight_decay': 0},
+                    {'params': self.net.bh, 'lr': lr_rate, 'weight_decay': 0},
+                    {'params': self.net.h2o, 'lr': lr_rate, 'weight_decay': 0},
+                    {'params': self.net.bo, 'lr': lr_rate, 'weight_decay': 0},
+                    {'params': self.net.r, 'lr': lr_rate, 'weight_decay': 0},
+                ]
+            )
+        else:
+            print('train_paras wrong')
 
         # Optimizer_q.zero_grad()
         loss_all = []
         for sequence in self.memory:
             Optimizer_q.zero_grad()
+            if self.input_type == 'touch':
+                inputs = torch.from_numpy(np.array(sequence['touches'])).float()
+            elif self.input_type == 'pos':
+                inputs = torch.from_numpy(np.array(sequence['positions'])).float()
+            else:
+                print('input_size wrong')
+
             q_predicts = self.net.forward_sequence_values(
-                torch.from_numpy(np.array(sequence['touches'])).float(),
+                inputs,
                 sequence['hidden0'],
                 torch.from_numpy(np.array([self.int2angle(action) for action in sequence['actions']])).float()
             )
@@ -137,7 +184,7 @@ class Rat():
             if len(Qs) >= 2:
                 loss_q = torch.mean((torch.stack(q_predicts[:-1]) - torch.stack(Qs).detach()) ** 2)
                 loss_q.backward()
-                print('loss', loss_q * 1000)
+                # print('loss', loss_q * 1000)
                 loss_all.append(10 * loss_q.detach().item())
             # for para in self.net.parameters():
             #     print(para.grad)
@@ -155,9 +202,6 @@ class Rat():
 
         trace = []
         Qs = []
-        self.discount = 0.99
-        self.lam = 0.9
-        self.alpha = 0.2
         # print('q_pre', len(Predicts), Predicts)
         for Q_now, Q_next, action, reward \
                 in zip(Predicts[:-1], Predicts[1:], Actions[1:], Rewards):
@@ -201,7 +245,7 @@ class Session:
                 if self.phase == 'train':
                     self.rat.remember(state, reward, action, done)
                 # print(self.rat.num_step, self.rat.int2angle(action), state[0], state[2], step)
-            print(self.phase, epoch, 'running reward', reward)
+            # print(self.phase, epoch, 'running reward', reward)
             self.rewards[self.phase].append(reward)
 
         self.mean_rewards[self.phase].append(np.array(self.rewards[self.phase]).mean())
@@ -230,7 +274,7 @@ if __name__ == '__main__':
 
     n_train = 1000
     rat = Rat(memory_size=100)
-    env = RatEnv(dim=[30, 30, 100], speed=1., goal=[10, 10, 2], limit=100, wall_offset=1., touch_offset=2.)
+    env = RatEnv(dim=[30, 30, 100], collect=False, speed=1., goal=[10, 10, 2], limit=100, wall_offset=1., touch_offset=2.)
     session = Session(rat, env)
     for i in range(n_train):
         rat.epsilon = 0.5 - i * 0.002 if i < 200 else 0.1
