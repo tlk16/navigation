@@ -86,7 +86,7 @@ def main(RLfunc=True, collect=False, iters=None, dim=None, speed=None, box=None,
 
 class RatEnv:
     def __init__(self, RLfunc=True, collect=False, iters=None, dim=None, speed=None, box=None, bar=None, goal=None, limit=None,
-             wall_offset=None, touch_offset=None):
+             wall_offset=None, touch_offset=None, step_reward=0., wall_reward=0.):
 
         self.ctrl = ratlab.parms(collect=collect, dim=dim, speed=speed, box=box, goal=goal, limit=limit,
                             wall_offset=wall_offset, touch_offset=touch_offset)
@@ -95,6 +95,9 @@ class RatEnv:
         self.ctrl.modules.world = world.World(self.ctrl.setup.world)
         self.ctrl.state.initPos = self.ctrl.modules.world.randomPosition()
         self.ctrl.modules.rat = ratbot.RatBot(self.ctrl.state.initPos, self.ctrl)
+
+        self.step_reward = step_reward
+        self.wall_reward = wall_reward
 
     def step(self, act):
 
@@ -107,7 +110,10 @@ class RatEnv:
         if self.ctrl.save.touch != 0:
             touch[self.ctrl.save.touch - 1] = 1
 
-        return [self.ctrl.save.nextPos, numpy.asarray(self.ctrl.state.last_view), touch], self.ctrl.save.reward, self.ctrl.save.done, self.ctrl.state.step
+        wall_reward = self.wall_reward if self.ctrl.save.touch != 0 else 0
+        reward = self.ctrl.save.reward + self.step_reward + wall_reward
+
+        return [self.ctrl.save.nextPos, numpy.asarray(self.ctrl.state.last_view), touch], reward, self.ctrl.save.done, self.ctrl.state.step
 
     def reset(self):
         position0 = self.ctrl.modules.world.randomPosition()
@@ -123,7 +129,12 @@ class RatEnv:
         touch = numpy.zeros((4,))
         if self.ctrl.save.touch != 0:
             touch[self.ctrl.save.touch - 1] = 1
-        return [self.ctrl.save.nextPos, numpy.asarray(self.ctrl.state.last_view), touch], self.ctrl.save.reward, self.ctrl.save.done, self.ctrl.state.step
+
+        wall_reward = self.wall_reward if self.ctrl.save.touch != 0 else 0
+        reward = self.ctrl.save.reward + self.step_reward + wall_reward
+
+        return [self.ctrl.save.nextPos, numpy.asarray(self.ctrl.state.last_view),
+                touch], reward, self.ctrl.save.done, self.ctrl.state.step
 
 
 if __name__ == '__main__':
@@ -136,7 +147,8 @@ if __name__ == '__main__':
     wall_offset = 1.  # >1
     touch_offset = 2.  # >1
 
-    ratenv = RatEnv(collect=collect, iters=iters, dim=dim, box=box, goal=goal, limit=limit, wall_offset=wall_offset, touch_offset=touch_offset)
+    ratenv = RatEnv(collect=collect, iters=iters, dim=dim, box=box, goal=goal, limit=limit, wall_offset=wall_offset, touch_offset=touch_offset,
+                    wall_reward=-0.05, step_reward=-0.01)
     for k in range(iters):
         state, reward, done, step = ratenv.reset()
         print(state[0], state[2], reward, done, step)
