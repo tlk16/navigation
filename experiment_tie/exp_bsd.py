@@ -284,23 +284,34 @@ class Session:
 
         for epoch in range(epochs):
             self.rat.reset(self.phase)
-            state, reward, done, step = self.env.reset()
-            done = False
-            self.rat.remember(state, reward, self.rat.action0, done)
-
+            sum_step = 0
             sr = 0
-            while not done:
-                action = self.rat.act(state)
-                state, reward, done, step = self.env.step(self.rat.int2angle(action))
-                if step < self.env.limit:
-                    done = False
-
+            while sum_step < self.env.limit:
+                state, reward, done, _ = self.env.reset()
+                sum_step += 1
                 if self.phase == 'train':
-                    self.rat.remember(state, reward, action, done)
+                    self.rat.remember(state, reward, self.rat.action0, sum_step == self.env.limit)
+                else:
+                    self.rat.remember(state, reward, self.rat.action0, done=False)
+                if sum_step == self.env.limit:
+                    break
 
-                # print(self.rat.num_step, self.rat.int2angle(action), state[0], state[2], step)
-            # print(self.phase, epoch, 'running reward', reward)
-                sr += reward
+
+                while not done:
+                    action = self.rat.act(state)
+                    state, reward, done, _ = self.env.step(self.rat.int2angle(action))
+                    # print(sum_step)
+                    sum_step += 1
+
+                    if self.phase == 'train':
+                        self.rat.remember(state, reward, action, sum_step == self.env.limit)
+                    if sum_step == self.env.limit:
+                        break
+
+                    # print(self.rat.num_step, self.rat.int2angle(action), state[0], state[2], step)
+                # print(self.phase, epoch, 'running reward', reward)
+                    sr += reward
+
             self.rewards[self.phase].append(sr)
 
         self.mean_rewards[self.phase].append(np.array(self.rewards[self.phase]).mean())

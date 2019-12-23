@@ -18,7 +18,7 @@ def worker(input_type='touch', epsilon=(0.5, 0.002, 0.1), train_paras='two', wal
     n_train = 500
     rat = Rat(memory_size=100, input_type=input_type, train_paras=train_paras)
     env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
-                 limit=60, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
+                 limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
     session = Session(rat, env)
     for i in range(n_train):
         print(i)
@@ -26,7 +26,7 @@ def worker(input_type='touch', epsilon=(0.5, 0.002, 0.1), train_paras='two', wal
             if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
 
         session.phase = 'train'
-        session.experiment(epochs=50)
+        session.experiment(epochs=5)
 
         session.phase = 'test'
         session.experiment(epochs=10)
