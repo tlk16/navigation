@@ -261,6 +261,25 @@ class Session:
         else:
             print('wrong phase')
 
+    def save_png(self, filename):
+        def smooth(list_a, n=3):
+            weights = np.ones(n) / n
+            return np.convolve(weights, list_a)[0:-n + 1]
+        plt.figure()
+        line1, = plt.plot(self.rat.losses, label='loss')
+        line2, = plt.plot(self.mean_rewards['train'], label='train')
+        line3, = plt.plot(self.mean_rewards['test'], label='test')
+        cum_train = smooth(self.mean_rewards['train'], 10)
+        cum_test = smooth(self.mean_rewards['test'], 10)
+        line4, = plt.plot(cum_train, label='train_cum')
+        line5, = plt.plot(cum_test, label='test_cum')
+        plt.legend(handles=[line1, line2, line3, line4, line5])
+        plt.savefig(filename)
+        plt.ion()
+        plt.pause(5)
+        plt.close()
+
+
 
 
 if __name__ == '__main__':
@@ -272,29 +291,14 @@ if __name__ == '__main__':
     # trained parameters
     # env limit dim goal
 
-    n_train = 1000
-    rat = Rat(memory_size=100)
-    env = RatEnv(dim=[30, 30, 100], collect=False, speed=1., goal=[10, 10, 2], limit=100, wall_offset=1., touch_offset=2.)
-    session = Session(rat, env)
-    for i in range(n_train):
-        rat.epsilon = 0.5 - i * 0.002 if i < 200 else 0.1
+    pass
 
-        session.phase = 'train'
-        session.experiment(epochs=10)
 
-        session.phase = 'test'
-        session.experiment(epochs=10)
-
-        if i % 10 == 0:
-            plt.figure()
-            line1, = plt.plot(session.rat.losses, label='loss')
-            line2, = plt.plot(session.mean_rewards['train'], label='train')
-            line3, = plt.plot(session.mean_rewards['test'], label='test')
-            plt.legend(handles=[line1, line2, line3])
-            plt.savefig(str(i) + '.png')
-            plt.ion()
-            plt.pause(5)
-            plt.close()
+    def smooth(list_a, n=3):
+        weights = np.ones(n) / n
+        return np.convolve(weights, list_a)[0:-n+1]
+    a = np.array([1,2,3,4,5,6, 7, 10])
+    print(smooth(a, 3))
 
 
     # try to train in int-grid situation
