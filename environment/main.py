@@ -96,6 +96,7 @@ class RatEnv:
         self.ctrl.state.initPos = self.ctrl.modules.world.randomPosition()
         self.ctrl.modules.rat = ratbot.RatBot(self.ctrl.state.initPos, self.ctrl)
 
+        self.limit = limit
         self.step_reward = step_reward
         self.wall_reward = wall_reward
 

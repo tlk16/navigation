@@ -277,8 +277,12 @@ class Session:
             while not done:
                 action = self.rat.act(state)
                 state, reward, done, step = self.env.step(self.rat.int2angle(action))
+                if step < self.env.limit:
+                    done = False
+
                 if self.phase == 'train':
                     self.rat.remember(state, reward, action, done)
+
                 # print(self.rat.num_step, self.rat.int2angle(action), state[0], state[2], step)
             # print(self.phase, epoch, 'running reward', reward)
             self.rewards[self.phase].append(reward)
