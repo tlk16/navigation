@@ -15,7 +15,7 @@ def worker(input_type='touch', epsilon=(0.5, 0.002, 0.1), train_paras='two', wal
     :param train_paras:
     :return:
     """
-    n_train = 300
+    n_train = 500
     rat = Rat(memory_size=100, input_type=input_type, train_paras=train_paras)
     env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
                  limit=60, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
@@ -43,15 +43,16 @@ def execute():
 
     :return:
     """
-    pool = multiprocessing.Pool(1)
+    pool = multiprocessing.Pool(2)
 
     for input_type in ['touch']:
         for train_paras in ['all']:
-            for rewards in [(-0.01, -0.01), (0, 0)]:
-                pool.apply(worker, (input_type, (0.8, 0.004, 0.2), train_paras, rewards[0], rewards[1]))
+            for rewards in [(0, 0)]:
+                for epsilon in [(0.8, 0.004, 0.2), (0.8, 0.002, 0.2)]:
+                    pool.apply(worker, (input_type, epsilon, train_paras, rewards[0], rewards[1]))
 
     pool.close()
     pool.join()
 
 if __name__ == '__main__':
-    execute()
+    worker()

@@ -133,9 +133,9 @@ class Rat():
         :param done:
         :return:
         """
-        self.sequence['positions'].append(state[0])
+        self.sequence['positions'].append(torch.from_numpy(state[0]))
         # self.sequence['observations'].append(state[1])
-        self.sequence['touches'].append(state[2])
+        self.sequence['touches'].append(torch.from_numpy(state[2]))
         self.sequence['rewards'].append(reward)
         self.sequence['actions'].append(action)
         if done:
@@ -173,32 +173,34 @@ class Rat():
 
         # Optimizer_q.zero_grad()
         loss_all = []
-        for sequence in self.memory:
-            Optimizer_q.zero_grad()
-            if self.input_type == 'touch':
-                inputs = torch.from_numpy(np.array(sequence['touches'])).float()
-            elif self.input_type == 'pos':
-                inputs = torch.from_numpy(np.array(sequence['positions'])).float()
-            else:
-                print('input_size wrong')
+        Optimizer_q.zero_grad()
+        if self.input_type == 'touch':
+            inputs = torch.stack([torch.stack(sequence['touches']) for sequence in self.memory])
+        elif self.input_type == 'pos':
+            inputs = torch.stack([torch.stack(sequence['positions']) for sequence in self.memory])
+        else:
+            print('input_size wrong')
 
-            q_predicts = self.net.forward_sequence_values(
-                inputs,
-                sequence['hidden0'],
-                torch.from_numpy(np.array([self.int2angle(action) for action in sequence['actions']])).float()
-            )
-            actions = torch.from_numpy(np.array(sequence['actions'])).float()
-            # print(actions)
-            Qs = self.value_backward(q_predicts, actions, sequence['rewards'])
-
-            if len(Qs) >= 2:
-                loss_q = torch.mean((torch.stack(q_predicts[:-1]) - torch.stack(Qs).detach()) ** 2)
-                loss_q.backward()
-                # print('loss', loss_q * 1000)
-                loss_all.append(10 * loss_q.detach().item())
-            # for para in self.net.parameters():
-            #     print(para.grad)
-            Optimizer_q.step()
+        q_predicts = self.net.forward_sequence_values(
+            inputs.float(),
+            torch.stack([sequence['hidden0'] for sequence in self.memory]).float(),
+            torch.stack([torch.from_numpy(np.array([self.int2angle(action) for action in sequence['actions']])) for sequence in self.memory]).float()
+        )
+        actions = torch.stack([torch.from_numpy(np.array(sequence['actions'])) for sequence in self.memory]).float()
+        # print(actions)
+        q_predicts = torch.stack(q_predicts).permute((1, 0, 2))
+        Qs = self.value_back(q_predicts, actions.unsqueeze(2).long(),
+                             torch.stack([torch.FloatTensor(sequence['rewards']) for sequence in self.memory]).unsqueeze(2)
+                             )
+        # print(q_predicts.shape, Qs.shape)
+        if len(Qs) >= 2:
+            loss_q = torch.mean((q_predicts[:, :-1, :] - Qs.detach()) ** 2)
+            loss_q.backward()
+            # print('loss', loss_q * 1000)
+            loss_all.append(10 * loss_q.detach().item())
+        # for para in self.net.parameters():
+        #     print(para.grad)
+        Optimizer_q.step()
         self.losses.append(np.array(loss_all).mean())
 
     def value_backward(self, Predicts, Actions, Rewards):
@@ -237,18 +239,19 @@ class Rat():
         :param rewards: tensor [50, 100, 1]
         :return:
         """
+        print('value_back', predicts.shape, actions.shape, rewards.shape)
         q = torch.unsqueeze(torch.max(predicts[:, 1:, :], 2)[0], 2)  # [5,9,1]  # q_max
         q = q * self.discount + rewards[:, 1:, :]
 
         g_last = q
         g_sum = q.clone()
-        print(g_sum)
+        # print(g_sum)
         for i in range(2, 10):
             g_now = rewards[:, :(-i), :] + self.discount * g_last[:, 1:, :]
             g_sum[:, :(-i + 1), :] += (self.lam ** (i - 1)) * g_now
             g_last = g_now
 
-        print(g_sum)
+        # print(g_sum)
         g_re = predicts[:, :-1, :].clone()  # 5,9,4
         g_re.scatter_(2, actions[:, :-1, :], g_sum * (1 - self.lam))
         return g_re
@@ -272,6 +275,7 @@ class Session:
         for epoch in range(epochs):
             self.rat.reset(self.phase)
             state, reward, done, step = self.env.reset()
+            done = False
             self.rat.remember(state, reward, self.rat.action0, done)
 
             while not done:

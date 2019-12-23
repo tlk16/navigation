@@ -38,6 +38,7 @@ class RNN(nn.Module):
 
     def forward(self, input_, hidden, action):
         # dim should be same except catting dimension
+        # print(input_.shape, hidden.shape, action.shape)
         hidden_ = torch.tanh(input_.matmul(self.i2h) + hidden.matmul(self.h2h) + action.matmul(self.a2h) + self.bh)
         hidden = torch.mul((1 - self.r), hidden_) + torch.mul(self.r, hidden) 
         output = hidden.matmul(self.h2o)+ self.bo
@@ -45,11 +46,12 @@ class RNN(nn.Module):
 
     def forward_sequence_values(self, inputs, hidden0, actions):
         # print('actions', actions)
-        squence_length = inputs.shape[0]
+        # print(inputs.shape)
+        squence_length = inputs.shape[1]
         outputs = []
-        hidden = hidden0
+        hidden = torch.squeeze(hidden0)
         for i in range(squence_length):
-            output, hidden = self.forward(inputs[i], hidden, actions[i])
+            output, hidden = self.forward(inputs[:, i], hidden, actions[:, i])
             outputs.append(output)
 
         return outputs
