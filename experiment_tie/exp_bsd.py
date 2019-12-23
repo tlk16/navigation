@@ -17,13 +17,15 @@ class Rat():
     agent reset, (act, remember), train
     """
 
-    def __init__(self, memory_size=50, input_type='touch', train_paras='two'):
+    def __init__(self, memory_size=50, input_type='touch', train_paras='two', device='cuda:0'):
         if input_type == 'touch':
-            self.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=8)
+            self.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=8).to(device)
         if input_type == 'pos':
-            self.net = RNN(input_size=2, action_size=2, hidden_size=512, output_size=8)
+            self.net = RNN(input_size=2, action_size=2, hidden_size=512, output_size=8).to(device)
         self.input_type = input_type
         self.train_paras = train_paras
+
+        self.device = device
 
         self.memory = []
         self.memory_size = memory_size
@@ -36,7 +38,7 @@ class Rat():
 
 
         self.num_step = 0
-        self.hidden_state = self.net.initHidden()
+        self.hidden_state = self.net.initHidden().to(device)
         self.action0 = self._initAction()
         self.sequence = None
         self.phase = 'train'
@@ -80,11 +82,12 @@ class Rat():
         if self.input_type == 'touch':
             with torch.no_grad():
                 touch = state[2]
-                touch = torch.from_numpy(touch).float()
+                touch = torch.from_numpy(touch).float().to(self.device)
                 # touch.shape = [4,]
-                last_action = torch.from_numpy(self.int2angle(self.sequence['actions'][-1])).float()
+                last_action = torch.from_numpy(self.int2angle(self.sequence['actions'][-1])).float().to(self.device)
                 output, self.hidden_state = self.net(touch, self.hidden_state, last_action)
                 # output.shape = [1,8] self.hidden_state.shape = [1,512]
+                output = output.to('cpu')
             self.num_step += 1
             if self.phase == 'train':
                 return self._epsilon_choose_action(output, epsilon=self.epsilon)
@@ -92,10 +95,11 @@ class Rat():
         elif self.input_type == 'pos':
             with torch.no_grad():
                 pos = state[0]
-                pos = torch.from_numpy(pos).float()
+                pos = torch.from_numpy(pos).float().to(self.device)
                 # touch.shape = [4,]
-                last_action = torch.from_numpy(self.int2angle(self.sequence['actions'][-1])).float()
+                last_action = torch.from_numpy(self.int2angle(self.sequence['actions'][-1])).float().to(self.device)
                 output, self.hidden_state = self.net(pos, self.hidden_state, last_action)
+                output = output.to('cpu')
                 # output.shape = [1,8] self.hidden_state.shape = [1,512]
             self.num_step += 1
             if self.phase == 'train':
@@ -110,7 +114,7 @@ class Rat():
         """
 
         if init_net:
-            self.hidden_state = self.net.initHidden()
+            self.hidden_state = self.net.initHidden().to(self.device)
 
         self.num_step = 0
         self.phase = phase
@@ -138,7 +142,13 @@ class Rat():
         self.sequence['touches'].append(torch.from_numpy(state[2]))
         self.sequence['rewards'].append(reward)
         self.sequence['actions'].append(action)
+
         if done:
+            self.sequence['touches'] = torch.stack(self.sequence['touches']).to(self.device)
+            self.sequence['positions'] = torch.stack(self.sequence['positions']).to(self.device)
+            self.sequence['actions'] = torch.from_numpy(np.array(self.sequence['actions'])).to(self.device)
+            self.sequence['action_angles'] = torch.from_numpy(np.array([self.int2angle(action) for action in self.sequence['actions']])).to(self.device)
+            self.sequence['rewards'] = torch.FloatTensor(self.sequence['rewards']).to(self.device)
             self.memory.append(self.sequence)
         if len(self.memory) > self.memory_size:
             del self.memory[0]
@@ -175,22 +185,22 @@ class Rat():
         loss_all = []
         Optimizer_q.zero_grad()
         if self.input_type == 'touch':
-            inputs = torch.stack([torch.stack(sequence['touches']) for sequence in self.memory])
+            inputs = torch.stack([sequence['touches'] for sequence in self.memory])
         elif self.input_type == 'pos':
-            inputs = torch.stack([torch.stack(sequence['positions']) for sequence in self.memory])
+            inputs = torch.stack([sequence['positions'] for sequence in self.memory])
         else:
             print('input_size wrong')
 
         q_predicts = self.net.forward_sequence_values(
             inputs.float(),
             torch.stack([sequence['hidden0'] for sequence in self.memory]).float(),
-            torch.stack([torch.from_numpy(np.array([self.int2angle(action) for action in sequence['actions']])) for sequence in self.memory]).float()
+            torch.stack([sequence['action_angles'] for sequence in self.memory]).float()
         )
-        actions = torch.stack([torch.from_numpy(np.array(sequence['actions'])) for sequence in self.memory]).float()
+        actions = torch.stack([sequence['actions'] for sequence in self.memory]).float()
         # print(actions)
         q_predicts = torch.stack(q_predicts).permute((1, 0, 2))
         Qs = self.value_back(q_predicts, actions.unsqueeze(2).long(),
-                             torch.stack([torch.FloatTensor(sequence['rewards']) for sequence in self.memory]).unsqueeze(2)
+                             torch.stack([sequence['rewards'] for sequence in self.memory]).unsqueeze(2)
                              )
         # print(q_predicts.shape, Qs.shape)
         if len(Qs) >= 2:
@@ -278,6 +288,7 @@ class Session:
             done = False
             self.rat.remember(state, reward, self.rat.action0, done)
 
+            sr = 0
             while not done:
                 action = self.rat.act(state)
                 state, reward, done, step = self.env.step(self.rat.int2angle(action))
@@ -289,7 +300,8 @@ class Session:
 
                 # print(self.rat.num_step, self.rat.int2angle(action), state[0], state[2], step)
             # print(self.phase, epoch, 'running reward', reward)
-            self.rewards[self.phase].append(reward)
+                sr += reward
+            self.rewards[self.phase].append(sr)
 
         self.mean_rewards[self.phase].append(np.array(self.rewards[self.phase]).mean())
         self.rewards = {'train': [], 'test': []}
