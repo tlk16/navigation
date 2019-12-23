@@ -32,8 +32,10 @@ class Rat():
         self.lam = 0.9
         self.alpha = 0.2
 
-        self.num_step = 0
         self.epsilon = 0.5
+
+
+        self.num_step = 0
         self.hidden_state = self.net.initHidden()
         self.action0 = self._initAction()
         self.sequence = None
@@ -123,6 +125,14 @@ class Rat():
 
     def remember(self, state, reward, action, done):
         # a_(t-1), s_t
+        """
+
+        :param state: s_0 ~s_t
+        :param reward: s_0 ~s_t
+        :param action: a_-1 ~ a_t-1
+        :param done:
+        :return:
+        """
         self.sequence['positions'].append(state[0])
         # self.sequence['observations'].append(state[1])
         self.sequence['touches'].append(state[2])
@@ -219,6 +229,31 @@ class Rat():
             Qs = [f(e, delta, q) for e, q in zip(trace, Qs)]
         return Qs
 
+    def value_back(self, predicts, actions, rewards):
+        """
+
+        :param predicts: tensor [50, 100, 8]
+        :param actions: tensor [50, 100, 1]
+        :param rewards: tensor [50, 100, 1]
+        :return:
+        """
+        q = torch.unsqueeze(torch.max(predicts[:, 1:, :], 2)[0], 2)  # [5,9,1]  # q_max
+        q = q * self.discount + rewards[:, 1:, :]
+
+        g_last = q
+        g_sum = q.clone()
+        print(g_sum)
+        for i in range(2, 10):
+            g_now = rewards[:, :(-i), :] + self.discount * g_last[:, 1:, :]
+            g_sum[:, :(-i + 1), :] += (self.lam ** (i - 1)) * g_now
+            g_last = g_now
+
+        print(g_sum)
+        g_re = predicts[:, :-1, :].clone()  # 5,9,4
+        g_re.scatter_(2, actions[:, :-1, :], g_sum * (1 - self.lam))
+        return g_re
+
+
 
 class Session:
     def __init__(self, rat, env):
@@ -303,3 +338,9 @@ if __name__ == '__main__':
 
     # try to train in int-grid situation
     # memory a_t-1, s_t, r_t,
+
+    # memory hundreds~sampling
+    # gpu batch
+    # just train some weights
+    #
+
