@@ -31,7 +31,7 @@ class Rat():
         self.memory_size = memory_size
 
         self.discount = 0.99
-        self.lam = 0.9
+        self.lam = 0.3
         self.alpha = 0.2
 
         self.epsilon = 0.5
@@ -149,6 +149,7 @@ class Rat():
             self.sequence['actions'] = torch.from_numpy(np.array(self.sequence['actions'])).to(self.device)
             self.sequence['action_angles'] = torch.from_numpy(np.array([self.int2angle(action) for action in self.sequence['actions']])).to(self.device)
             self.sequence['rewards'] = torch.FloatTensor(self.sequence['rewards']).to(self.device)
+            # print(self.sequence)
             self.memory.append(self.sequence)
         if len(self.memory) > self.memory_size:
             del self.memory[0]

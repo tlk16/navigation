@@ -26,7 +26,7 @@ def worker(input_type='touch', epsilon=(0.5, 0.002, 0.1), train_paras='two', wal
             if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
 
         session.phase = 'train'
-        session.experiment(epochs=5)
+        session.experiment(epochs=50)
 
         session.phase = 'test'
         session.experiment(epochs=10)
@@ -43,16 +43,16 @@ def execute():
 
     :return:
     """
-    pool = multiprocessing.Pool(2)
+    pool = multiprocessing.Pool(4)
 
     for input_type in ['touch']:
-        for train_paras in ['all']:
+        for train_paras in ['all', 'two']:
             for rewards in [(0, 0)]:
                 for epsilon in [(0.8, 0.004, 0.2), (0.8, 0.002, 0.2)]:
-                    pool.apply(worker, (input_type, epsilon, train_paras, rewards[0], rewards[1]))
+                    pool.apply_async(worker, (input_type, epsilon, train_paras, rewards[0], rewards[1]))
 
     pool.close()
     pool.join()
 
 if __name__ == '__main__':
-    worker()
+    execute()

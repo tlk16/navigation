@@ -51,6 +51,7 @@ class RNN(nn.Module):
         outputs = []
         hidden = torch.squeeze(hidden0)
         for i in range(squence_length):
+            # print(inputs[:, i].shape, hidden.shape, actions[:, i].shape)
             output, hidden = self.forward(inputs[:, i], hidden, actions[:, i])
             outputs.append(output)
 
