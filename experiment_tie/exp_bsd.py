@@ -107,7 +107,6 @@ class Rat():
         else:
             raise TypeError('rat.phase wrong')
 
-        action = 1
         self.last_action = action
         return action
 
@@ -185,7 +184,7 @@ class Rat():
             train_memory = random.sample(self.memory, self.batch_size)
         else:
             train_memory = self.memory
-        loss_all = []
+
         Optimizer_q.zero_grad()
         if self.input_type == 'touch':
             inputs = torch.stack([sequence['touches'] for sequence in train_memory])
@@ -206,15 +205,15 @@ class Rat():
         rewards = torch.stack([sequence['rewards'] for sequence in train_memory])
         rewards = rewards.unsqueeze(2)
 
+        # print(torch.stack(q_predicts).shape)
         q_predicts = torch.stack(q_predicts).permute((1, 0, 2))
 
         Qs = self.value_back(q_predicts, actions, rewards)
 
         loss_q = torch.mean((q_predicts[:, :-1, :] - Qs.detach()) ** 2)
         loss_q.backward()
-        loss_all.append(loss_q.detach().item())
         Optimizer_q.step()
-        self.losses.append(np.array(loss_all).mean())
+        self.losses.append(loss_q.detach().item())
 
     def value_back(self, predicts, actions, rewards):
         """
@@ -286,7 +285,7 @@ class Session:
         # initialize, might take data during test
         if self.phase == 'train':
             self.episode(epochs)
-            print(self.rat.memory)
+            # print(self.rat.memory)
             self.rat.train()
         elif self.phase == 'test':
             self.episode(epochs)

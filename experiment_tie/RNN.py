@@ -45,6 +45,13 @@ class RNN(nn.Module):
         return output, hidden
 
     def forward_sequence_values(self, inputs, hidden0, actions):
+        """
+
+        :param inputs: [batch_stize, sequence_len, input_size]
+        :param hidden0: [batch_size, input_size]
+        :param actions: [batch_stize, sequence_len, action_size]
+        :return:
+        """
         # print('actions', actions)
         # print(inputs.shape)
         squence_length = inputs.shape[1]
