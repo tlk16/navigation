@@ -17,11 +17,12 @@ class Rat():
     agent reset, (act, remember), train
     """
 
-    def __init__(self, memory_size=50, input_type='touch', train_paras='two', device='cuda:0'):
+    def __init__(self, memory_size=50, input_type='touch', train_paras='two', device='cuda:1'):
         if input_type == 'touch':
             self.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=8).to(device)
         if input_type == 'pos':
             self.net = RNN(input_size=2, action_size=2, hidden_size=512, output_size=8).to(device)
+
         self.input_type = input_type
         self.train_paras = train_paras
 
@@ -29,13 +30,13 @@ class Rat():
 
         self.memory = []
         self.memory_size = memory_size
-
+   
         self.discount = 0.99
         self.lam = 0.3
         self.alpha = 0.2
 
+        # changed
         self.epsilon = 0.5
-
 
         self.num_step = 0
         self.hidden_state = self.net.initHidden().to(device)
@@ -289,6 +290,7 @@ class Session:
             sr = 0
             while sum_step < self.env.limit:
                 state, reward, done, _ = self.env.reset()
+                sr += reward
                 sum_step += 1
                 if self.phase == 'train':
                     self.rat.remember(state, reward, self.rat.action0, sum_step == self.env.limit)
@@ -361,18 +363,42 @@ if __name__ == '__main__':
     pass
 
 
-    def smooth(list_a, n=3):
-        weights = np.ones(n) / n
-        return np.convolve(weights, list_a)[0:-n+1]
-    a = np.array([1,2,3,4,5,6, 7, 10])
-    print(smooth(a, 3))
+    def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005):
+        """
+
+        :param input_type:
+        :param epsilon:
+        :param train_paras:
+        :return:
+        """
+        n_train = 500
+        rat = Rat(memory_size=200, input_type=input_type, train_paras=train_paras)
+        env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
+                     limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
+        session = Session(rat, env)
+        for i in range(n_train):
+            print(i)
+            rat.epsilon = epsilon[0] - i * epsilon[1] \
+                if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
+
+            session.phase = 'train'
+            session.experiment(epochs=50)
+
+            session.phase = 'test'
+            session.experiment(epochs=10)
+
+            if (i + 1) % 20 == 0:
+                session.save_png(input_type + '[' + str(epsilon[0]) + ' ' +
+                                 str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
+                                 train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + '.png')
 
 
+    worker()
     # try to train in int-grid situation
     # memory a_t-1, s_t, r_t,
 
     # memory hundreds~sampling
     # gpu batch
     # just train some weights
-    #
+    # grid int action
 

@@ -7,7 +7,8 @@ from matplotlib import pyplot as plt
 from environment import RatEnv
 from exp_bsd import Rat, Session
 
-def worker(input_type='touch', epsilon=(0.5, 0.002, 0.1), train_paras='two', wall_reward=0.0, step_reward=0.0):
+
+def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005):
     """
 
     :param input_type:
@@ -16,7 +17,7 @@ def worker(input_type='touch', epsilon=(0.5, 0.002, 0.1), train_paras='two', wal
     :return:
     """
     n_train = 500
-    rat = Rat(memory_size=100, input_type=input_type, train_paras=train_paras)
+    rat = Rat(memory_size=200, input_type=input_type, train_paras=train_paras)
     env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
                  limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
     session = Session(rat, env)
@@ -31,10 +32,10 @@ def worker(input_type='touch', epsilon=(0.5, 0.002, 0.1), train_paras='two', wal
         session.phase = 'test'
         session.experiment(epochs=10)
 
-        if (i+1) % 20 == 0:
+        if (i + 1) % 20 == 0:
             session.save_png(input_type + '[' + str(epsilon[0]) + ' ' +
-                        str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
-                        train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + '.png')
+                             str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
+                             train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + '.png')
 
 
 
@@ -46,9 +47,9 @@ def execute():
     pool = multiprocessing.Pool(4)
 
     for input_type in ['touch']:
-        for train_paras in ['all', 'two']:
-            for rewards in [(0, 0)]:
-                for epsilon in [(0.8, 0.004, 0.2), (0.8, 0.002, 0.2)]:
+        for train_paras in ['all']:
+            for rewards in [(0, -0.005)]:
+                for epsilon in [(1, 0.002, 0.1), (0.95, 0.002, 0.1), (0.9, 0.002, 0.1), (0.92, 0.002, 0.1)]:
                     pool.apply_async(worker, (input_type, epsilon, train_paras, rewards[0], rewards[1]))
 
     pool.close()
