@@ -107,6 +107,7 @@ class Rat():
         else:
             raise TypeError('rat.phase wrong')
 
+        action = 1
         self.last_action = action
         return action
 
@@ -149,8 +150,8 @@ class Rat():
         if done:
             self.sequence['touches'] = torch.stack(self.sequence['touches']).to(self.device)
             self.sequence['positions'] = torch.stack(self.sequence['positions']).to(self.device)
-            self.sequence['actions'] = torch.from_numpy(np.array(self.sequence['actions'])).to(self.device)
             self.sequence['action_angles'] = torch.from_numpy(np.array([self.int2angle(action) for action in self.sequence['actions']])).to(self.device)
+            self.sequence['actions'] = torch.from_numpy(np.array(self.sequence['actions'])).to(self.device)
             self.sequence['rewards'] = torch.FloatTensor(self.sequence['rewards']).to(self.device)
             # print(self.sequence)
             self.memory.append(self.sequence)
@@ -285,6 +286,7 @@ class Session:
         # initialize, might take data during test
         if self.phase == 'train':
             self.episode(epochs)
+            print(self.rat.memory)
             self.rat.train()
         elif self.phase == 'test':
             self.episode(epochs)
@@ -321,8 +323,28 @@ if __name__ == '__main__':
     # trained parameters
     # env limit dim goal
 
-    pass
-
+    class Env:
+        def __init__(self):
+            self.limit = 10
+            self.t = 0
+        def reset(self):
+            self.t += 1
+            if self.t % 5 == 0:
+                reward = 2
+                done = True
+            else:
+                reward = 0
+                done = False
+            return [np.array([0, 0]), np.array([0]), np.array([1, 0, 0, 0])], reward, done, ''
+        def step(self, action=None):
+            self.t += 1
+            if self.t % 5 == 0:
+                reward = 1
+                done = True
+            else:
+                reward = 0
+                done = False
+            return [np.array([0, 0]), np.array([0]), np.array([1,0,0,0])], reward, done, ''
 
     def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005):
         """
@@ -332,10 +354,9 @@ if __name__ == '__main__':
         :param train_paras:
         :return:
         """
-        n_train = 500
+        n_train = 1
         rat = Rat(memory_size=200, input_type=input_type, train_paras=train_paras)
-        env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
-                     limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
+        env = Env()
         session = Session(rat, env)
         for i in range(n_train):
             print(i)
@@ -343,10 +364,10 @@ if __name__ == '__main__':
                 if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
 
             session.phase = 'train'
-            session.experiment(epochs=5)
+            session.experiment(epochs=1)
 
-            session.phase = 'test'
-            session.experiment(epochs=10)
+            # session.phase = 'test'
+            # session.experiment(epochs=10)
 
             if (i + 1) % 20 == 0:
                 session.save_png(input_type + '[' + str(epsilon[0]) + ' ' +
