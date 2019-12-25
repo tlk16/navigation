@@ -20,9 +20,14 @@ class Rat():
     def __init__(self, memory_size=50, input_type='touch', train_paras='two', device='cuda:1'):
         if input_type == 'touch':
             self.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=8).to(device)
-        if input_type == 'pos':
+        elif input_type == 'pos':
             self.net = RNN(input_size=2, action_size=2, hidden_size=512, output_size=8).to(device)
+        else:
+            raise TypeError('input tpye wrong')
 
+        self.action_space = 8
+
+        # parameters useless in the future
         self.input_type = input_type
         self.train_paras = train_paras
 
@@ -30,7 +35,8 @@ class Rat():
 
         self.memory = []
         self.memory_size = memory_size
-   
+
+        # Q-learning parameters
         self.discount = 0.99
         self.lam = 0.3
         self.alpha = 0.2
@@ -40,7 +46,7 @@ class Rat():
 
         self.num_step = 0
         self.hidden_state = self.net.initHidden().to(device)
-        self.action0 = self._initAction()
+        self.last_action = self._initAction()
         self.sequence = None
         self.phase = 'train'
         self.losses = []
@@ -55,7 +61,7 @@ class Rat():
         if random.random() > epsilon:
             return self._greedy_choose_action(q_value)
 
-        return random.randint(0, 7)
+        return random.randint(0, self.action_space - 1)
 
     def _greedy_choose_action(self, q_value):
         return torch.argmax(q_value).item()
@@ -67,12 +73,12 @@ class Rat():
         :return: action vector, np.array
         """
 
-        angle = action * math.pi / 4
+        angle = action * 2 * math.pi / self.action_space
         # return np.array([np.sign(math.cos(angle)), np.sign(math.sin(angle))])
         return np.array([math.cos(angle), math.sin(angle)])
 
     def _initAction(self):
-        return random.randint(0, 7)
+        return random.randint(0, self.action_space - 1)
 
     def act(self, state):
         """
@@ -81,33 +87,22 @@ class Rat():
         :return:
         """
         if self.input_type == 'touch':
-            with torch.no_grad():
-                touch = state[2]
-                touch = torch.from_numpy(touch).float().to(self.device)
-                # touch.shape = [4,]
-                last_action = torch.from_numpy(self.int2angle(self.sequence['actions'][-1])).float().to(self.device)
-                output, self.hidden_state = self.net(touch, self.hidden_state, last_action)
-                # output.shape = [1,8] self.hidden_state.shape = [1,512]
-                output = output.to('cpu')
-            self.num_step += 1
-            if self.phase == 'train':
-                return self._epsilon_choose_action(output, epsilon=self.epsilon)
-            return self._greedy_choose_action(output)
+            input = state[2]
         elif self.input_type == 'pos':
-            with torch.no_grad():
-                pos = state[0]
-                pos = torch.from_numpy(pos).float().to(self.device)
-                # touch.shape = [4,]
-                last_action = torch.from_numpy(self.int2angle(self.sequence['actions'][-1])).float().to(self.device)
-                output, self.hidden_state = self.net(pos, self.hidden_state, last_action)
-                output = output.to('cpu')
-                # output.shape = [1,8] self.hidden_state.shape = [1,512]
-            self.num_step += 1
-            if self.phase == 'train':
-                return self._epsilon_choose_action(output, epsilon=self.epsilon)
-            return self._greedy_choose_action(output)
+            input = state[0]
         else:
-            print('input_size wrong')
+            raise TypeError('input tpye wrong')
+
+
+        with torch.no_grad():
+            touch = torch.from_numpy(input).float().to(self.device)  # touch.shape = [4,]
+            output, self.hidden_state = self.net(touch, self.hidden_state,
+                                                 torch.from_numpy(self.int2angle(self.last_action)).float().to(self.device))
+            # output.shape = [1,8] self.hidden_state.shape = [1,512]
+        self.num_step += 1
+        if self.phase == 'train':
+            return self._epsilon_choose_action(output, epsilon=self.epsilon)
+        return self._greedy_choose_action(output)
 
     def reset(self, init_net=True, phase='train'):
         """
@@ -117,6 +112,7 @@ class Rat():
         if init_net:
             self.hidden_state = self.net.initHidden().to(self.device)
 
+        self.last_action = self._initAction()
         self.num_step = 0
         self.phase = phase
         self.sequence = {
@@ -153,19 +149,14 @@ class Rat():
             # print(self.sequence)
             self.memory.append(self.sequence)
         if len(self.memory) > self.memory_size:
-            del self.memory[0]
+            del self.memory[0:int(self.memory_size/5)]
 
     def train(self, lr_rate=1e-6):
         if self.train_paras == 'two':
             Optimizer_q = torch.optim.Adam(
                 [
-                    # {'params': self.net.i2h, 'lr': lr_rate, 'weight_decay': 0},
-                    # {'params': self.net.a2h, 'lr': lr_rate, 'weight_decay': 0},
-                    # {'params': self.net.h2h, 'lr': lr_rate, 'weight_decay': 0},
-                    # {'params': self.net.bh, 'lr': lr_rate, 'weight_decay': 0},
                     {'params': self.net.h2o, 'lr': lr_rate, 'weight_decay': 0},
                     {'params': self.net.bo, 'lr': lr_rate, 'weight_decay': 0},
-                    # {'params': self.net.r, 'lr': lr_rate, 'weight_decay': 0},
                 ]
             )
         elif self.train_paras == 'all':
@@ -181,9 +172,8 @@ class Rat():
                 ]
             )
         else:
-            print('train_paras wrong')
+            raise TypeError('train paras wrong')
 
-        # Optimizer_q.zero_grad()
         loss_all = []
         Optimizer_q.zero_grad()
         if self.input_type == 'touch':
@@ -191,7 +181,7 @@ class Rat():
         elif self.input_type == 'pos':
             inputs = torch.stack([sequence['positions'] for sequence in self.memory])
         else:
-            print('input_size wrong')
+            raise TypeError('input type wrong')
 
         q_predicts = self.net.forward_sequence_values(
             inputs.float(),
@@ -214,34 +204,6 @@ class Rat():
         #     print(para.grad)
         Optimizer_q.step()
         self.losses.append(np.array(loss_all).mean())
-
-    def value_backward(self, Predicts, Actions, Rewards):
-        """
-        Predicts: list, length=[num_step], each item is tensor, size=[1, 8]
-        Actions: Tensor, size=[num_step]
-        Rewards: list length=[num_step]
-        """
-
-        # print(Predicts[0].shape, Actions, Rewards)
-
-        trace = []
-        Qs = []
-        # print('q_pre', len(Predicts), Predicts)
-        for Q_now, Q_next, action, reward \
-                in zip(Predicts[:-1], Predicts[1:], Actions[1:], Rewards):
-            action = int(action.item())
-            targetQ = Q_now.clone().detach()  # [1, 8]
-            Qmax = torch.max(Q_next)   # float
-
-            delta = torch.FloatTensor([reward]) + self.discount * Qmax  - targetQ[0, action]
-            trace = [e * self.discount * self.lam for e in trace]
-            Qs.append(targetQ)
-            trace.append(1)
-            def f(e, delta, q):
-                q[0, action] = q[0, action] + self.alpha * delta * e
-                return q
-            Qs = [f(e, delta, q) for e, q in zip(trace, Qs)]
-        return Qs
 
     def value_back(self, predicts, actions, rewards):
         """
