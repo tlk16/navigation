@@ -154,10 +154,11 @@ class Rat():
             self.sequence['rewards'] = torch.FloatTensor(self.sequence['rewards']).to(self.device)
             # print(self.sequence)
             self.memory.append(self.sequence)
+
         if len(self.memory) > self.memory_size:
             del self.memory[0:int(self.memory_size/5)]
 
-    def train(self, lr_rate=1e-6):
+    def train(self, lr_rate=1e-5):
         if self.train_paras == 'two':
             Optimizer_q = torch.optim.Adam(
                 [
@@ -322,29 +323,6 @@ if __name__ == '__main__':
     # trained parameters
     # env limit dim goal
 
-    class Env:
-        def __init__(self):
-            self.limit = 10
-            self.t = 0
-        def reset(self):
-            self.t += 1
-            if self.t % 5 == 0:
-                reward = 2
-                done = True
-            else:
-                reward = 0
-                done = False
-            return [np.array([0, 0]), np.array([0]), np.array([1, 0, 0, 0])], reward, done, ''
-        def step(self, action=None):
-            self.t += 1
-            if self.t % 5 == 0:
-                reward = 1
-                done = True
-            else:
-                reward = 0
-                done = False
-            return [np.array([0, 0]), np.array([0]), np.array([1,0,0,0])], reward, done, ''
-
     def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005):
         """
 
@@ -353,28 +331,30 @@ if __name__ == '__main__':
         :param train_paras:
         :return:
         """
-        n_train = 1
-        rat = Rat(memory_size=200, input_type=input_type, train_paras=train_paras)
-        env = Env()
+        n_train = 500
+        rat = Rat(memory_size=1000, input_type=input_type, train_paras=train_paras, device='cuda:1')
+        env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
+                     limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
         session = Session(rat, env)
         for i in range(n_train):
-            print(i)
-            rat.epsilon = epsilon[0] - i * epsilon[1] \
-                if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
+            if i < 50:
+                rat.epsilon = 1
+            else:
+                rat.epsilon = epsilon[0] - i * epsilon[1] \
+                    if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
+            print(i, rat.epsilon)
 
             session.phase = 'train'
-            session.experiment(epochs=1)
+            session.experiment(epochs=50)
 
-            # session.phase = 'test'
-            # session.experiment(epochs=10)
+            session.phase = 'test'
+            session.experiment(epochs=10)
 
             if (i + 1) % 20 == 0:
                 session.save_png(input_type + '[' + str(epsilon[0]) + ' ' +
                                  str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
-                                 train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + '.png')
-
-
-    worker()
+                                 train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + 'new.png')
+    worker(input_type='touch', epsilon=(1, 0.002, 0.1), train_paras='all', wall_reward=0, step_reward=-0.005)
     # try to train in int-grid situation
     # memory a_t-1, s_t, r_t,
 

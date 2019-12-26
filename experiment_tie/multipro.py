@@ -17,7 +17,7 @@ def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wal
     :return:
     """
     n_train = 500
-    rat = Rat(memory_size=200, input_type=input_type, train_paras=train_paras)
+    rat = Rat(memory_size=1000, input_type=input_type, train_paras=train_paras, device='cuda:1')
     env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
                  limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
     session = Session(rat, env)
