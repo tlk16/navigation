@@ -35,7 +35,7 @@ class FakeNN(nn.Module):
     def forward(self, input_, hidden, action):
         # dim should be same except catting dimension
         # print(input_.shape, hidden.shape, action.shape)
-        self.his.append([hidden])
+        self.his.append([input_, hidden, action])
         hidden = torch.ones(1, self.hidden_size)
         output = torch.FloatTensor([1,0,0,0,0,0,0,0])
         return output, hidden
@@ -94,8 +94,15 @@ def test_worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all'
     rat.epsilon = 0
     session.phase = 'train'
     session.episode(epochs=2)
-    print(session.rat.memory)
-    # print(session.rat.net.his)
+    # print(session.rat.memory)
+    assert abs(session.rat.memory[0]['rewards'][0].item() + 0.02) < 1e-3
+    assert abs(session.rat.memory[0]['rewards'][5].item() + 0.02) < 1e-3
+    assert abs(session.rat.memory[0]['rewards'][4].item() - 1) < 1e-3
+
+    assert abs(session.rat.memory[0]['actions'][0].item()) > 1e-3
+    assert abs(session.rat.memory[0]['actions'][5].item()) > 1e-3
+
+    print(session.rat.net.his)
 
     # assert session.rat.memory['actions'] ==
 
@@ -149,6 +156,6 @@ def test_value_back():
 def test_tool():
     pass
 
-test_value_back()
+test_worker()
 
 
