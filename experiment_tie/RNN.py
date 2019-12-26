@@ -56,13 +56,15 @@ class RNN(nn.Module):
         # print(inputs.shape)
         squence_length = inputs.shape[1]
         outputs = []
+        hiddens = []
         hidden = torch.squeeze(hidden0)
         for i in range(squence_length):
             # print(inputs[:, i].shape, hidden.shape, actions[:, i].shape)
             output, hidden = self.forward(inputs[:, i], hidden, actions[:, i])
             outputs.append(output)
+            hiddens.append(hidden)
 
-        return outputs
+        return outputs, hiddens
 
 
     
@@ -75,15 +77,32 @@ class RNN(nn.Module):
         return torch.mean(-F.softmax(- beta * target.view(batch_size,-1)) \
                         * torch.log(F.softmax(- beta * predict.view(batch_size,-1), dim = 1) + 1e-5)) 
     
-class decoder(nn.Module):
+class Decoder(nn.Module):
     def __init__(self, hidden_size, output_size):
-        super(decoder, self).__init__()
+        super(Decoder, self).__init__()
         self.h2p = nn.Parameter(torch.randn(hidden_size, output_size) * 1 * np.sqrt(2.0/(hidden_size + 2 * output_size + 8)))
-        self.bp = nn.Parameter(torch.randn(1, output_size) * 1 * np.sqrt(2.0/(hidden_size + 2 * output_size + 8)))    
+        self.bp = nn.Parameter(torch.randn(1, output_size) * 1 * np.sqrt(2.0/(hidden_size + 2 * output_size + 8)))
+
     def forward(self, hidden):
         # dim should be same except catting dimension
         output = hidden.matmul(self.h2p)+ self.bp
         return output
+
+    def forward_sequence_values(self, hiddens):
+        """
+
+        :param hiddens: [batch_stize, sequence_len, hidden_size]
+        :return:
+        """
+        # print('actions', actions)
+        # print(inputs.shape)
+        squence_length = hiddens.shape[1]
+        outputs = []
+        for i in range(squence_length):
+            # print(inputs[:, i].shape, hidden.shape, actions[:, i].shape)
+            output = self.forward(hiddens[:, i])
+            outputs.append(output)
+        return outputs
     
 # recursive least square is used, mtraix P which is inverse correlaiton of input and beta is updated in a recursive way, pay attention to memory related to matrix inversion  
 class LinearRegression(torch.nn.Module):

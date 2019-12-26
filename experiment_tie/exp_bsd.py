@@ -7,7 +7,7 @@ import torch.optim as optim
 import torch
 import torch.utils.data
 
-from RNN import RNN
+from RNN import RNN, Decoder
 from environment import RatEnv
 from matplotlib import pyplot as plt
 
@@ -17,7 +17,15 @@ class Rat():
     agent reset, (act, remember), train
     """
 
-    def __init__(self, memory_size=1000, input_type='touch', train_paras='two', device='cuda:1'):
+    def __init__(self, memory_size=1000, input_type='touch', train_paras='two', device='cuda:1', train_stage='q_learning'):
+
+        # parameters useless in the future
+        self.input_type = input_type
+        self.train_paras = train_paras
+        self.train_stage = train_stage
+
+        self.device = device
+
         if input_type == 'touch':
             self.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=8).to(device)
         elif input_type == 'pos':
@@ -25,13 +33,11 @@ class Rat():
         else:
             raise TypeError('input tpye wrong')
 
+        self.decoder = Decoder(hidden_size=512, output_size=2).to(device)
+        self.lr_rate = 1e-5
+        self.Optimizer_q, self.Optimizer_pos = self._init_optimizer(self.lr_rate)
+
         self.action_space = 8
-
-        # parameters useless in the future
-        self.input_type = input_type
-        self.train_paras = train_paras
-
-        self.device = device
 
         self.memory = []
         self.memory_size = memory_size
@@ -81,12 +87,18 @@ class Rat():
     def _initAction(self):
         return random.randint(0, self.action_space - 1)
 
-    def act(self, state):
+    def _random_act(self, state, keep_p=0.4):
+        # print(np.mean(np.array(state[2]) - np.zeros(4)))
+        if np.mean(np.array(state[2]) - np.zeros(4)) > 1e-3 or random.random() > keep_p:
+            return random.randint(0, self.action_space - 1)
+        return self.last_action
+
+    def _rl_act(self, state):
         """
-        give action(int) accoring to state
-        :param state: state[2]: array or list shape=[4,]
-        :return:
-        """
+                give action(int) accoring to state
+                :param state: state[2]: array or list shape=[4,]
+                :return:
+                """
         if self.input_type == 'touch':
             input = state[2]
         elif self.input_type == 'pos':
@@ -97,7 +109,8 @@ class Rat():
         with torch.no_grad():
             touch = torch.from_numpy(input).float().to(self.device)  # touch.shape = [4,]
             output, self.hidden_state = self.net(touch, self.hidden_state,
-                                                 torch.from_numpy(self.int2angle(self.last_action)).float().to(self.device))
+                                                 torch.from_numpy(self.int2angle(self.last_action)).float().to(
+                                                     self.device))
             # output.shape = [1,8] self.hidden_state.shape = [1,512]
 
         if self.phase == 'train':
@@ -106,6 +119,15 @@ class Rat():
             action = self._greedy_choose_action(output)
         else:
             raise TypeError('rat.phase wrong')
+        return action
+
+    def act(self, state):
+        if self.train_stage == 'pre_train':
+            action = self._random_act(state, keep_p=0.4)
+        elif self.train_stage == 'q_learning':
+            action = self._rl_act(state)
+        else:
+            raise TypeError('train_stage wrong')
 
         self.last_action = action
         return action
@@ -158,7 +180,7 @@ class Rat():
         if len(self.memory) > self.memory_size:
             del self.memory[0:int(self.memory_size/5)]
 
-    def train(self, lr_rate=1e-5):
+    def _init_optimizer(self, lr_rate):
         if self.train_paras == 'two':
             Optimizer_q = torch.optim.Adam(
                 [
@@ -181,12 +203,32 @@ class Rat():
         else:
             raise TypeError('train paras wrong')
 
+        Optimizer_pos = torch.optim.Adam(
+            [
+                {'params': self.net.i2h, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.a2h, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.h2h, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.bh, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.h2o, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.bo, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.r, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.decoder.h2p, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.decoder.bp, 'lr': lr_rate, 'weight_decay': 0},
+            ]
+        )
+
+        return Optimizer_q, Optimizer_pos
+
+    def train(self):
+
         if self.batch_size <= len(self.memory):
             train_memory = random.sample(self.memory, self.batch_size)
         else:
             train_memory = self.memory
 
-        Optimizer_q.zero_grad()
+        self.Optimizer_q.zero_grad()
+        self.Optimizer_pos.zero_grad()
+
         if self.input_type == 'touch':
             inputs = torch.stack([sequence['touches'] for sequence in train_memory])
         elif self.input_type == 'pos':
@@ -194,27 +236,42 @@ class Rat():
         else:
             raise TypeError('input type wrong')
 
-        q_predicts = self.net.forward_sequence_values(
+        q_predicts, hiddens = self.net.forward_sequence_values(
             inputs.float(),
             torch.stack([sequence['hidden0'] for sequence in train_memory]).float(),
             torch.stack([sequence['action_angles'] for sequence in train_memory]).float()
         )
 
-        actions = torch.stack([sequence['actions'] for sequence in train_memory])
-        actions = actions.unsqueeze(2).long()
+        if self.train_stage == 'q_learning':
 
-        rewards = torch.stack([sequence['rewards'] for sequence in train_memory])
-        rewards = rewards.unsqueeze(2)
+            actions = torch.stack([sequence['actions'] for sequence in train_memory])
+            actions = actions.unsqueeze(2).long()
 
-        # print(torch.stack(q_predicts).shape)
-        q_predicts = torch.stack(q_predicts).permute((1, 0, 2))
+            rewards = torch.stack([sequence['rewards'] for sequence in train_memory])
+            rewards = rewards.unsqueeze(2)
 
-        Qs = self.value_back(q_predicts, actions, rewards)
+            # print(torch.stack(q_predicts).shape)
+            q_predicts = torch.stack(q_predicts).permute((1, 0, 2))
+            Qs = self.value_back(q_predicts, actions, rewards)
 
-        loss_q = torch.mean((q_predicts[:, :-1, :] - Qs.detach()) ** 2)
-        loss_q.backward()
-        Optimizer_q.step()
-        self.losses.append(loss_q.detach().item())
+            loss_q = torch.mean((q_predicts[:, :-1, :] - Qs.detach()) ** 2)
+            loss_q.backward()
+            self.Optimizer_q.step()
+            self.losses.append(loss_q.detach().item())
+
+        elif self.train_stage == 'pre_train':
+            hiddens = torch.stack(hiddens).permute((1, 0, 2))
+            pos_predicts = self.decoder.forward_sequence_values(hiddens)
+            pos_predicts = torch.stack(pos_predicts).permute((1, 0, 2))
+            print(pos_predicts.shape)
+            pos = torch.stack([sequence['positions'] for sequence in train_memory]).float()
+            loss_pos = torch.mean((pos_predicts - pos.detach()) ** 2)
+
+            loss_pos.backward()
+            self.Optimizer_pos.step()
+            self.losses.append(loss_pos.detach().item())
+        else:
+            raise TypeError('train stage wrong')
 
     def value_back(self, predicts, actions, rewards):
         """

@@ -102,9 +102,7 @@ def test_worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all'
     assert abs(session.rat.memory[0]['actions'][0].item()) > 1e-3
     assert abs(session.rat.memory[0]['actions'][5].item()) > 1e-3
 
-    print(session.rat.net.his)
-
-    # assert session.rat.memory['actions'] ==
+    # print(session.rat.net.his)
 
 def test_RNN():
     pass
@@ -156,6 +154,41 @@ def test_value_back():
 def test_tool():
     pass
 
+
+def test_pos_predict(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005, train_stage='q_learning'):
+    """
+
+    :param input_type:
+    :param epsilon:
+    :param train_paras:
+    :return:
+    """
+    n_train = 500
+    rat = Rat(memory_size=1000, input_type=input_type, train_paras=train_paras, device='cuda:1', train_stage='pre_train')
+    env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
+                 limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
+    session = Session(rat, env)
+    for i in range(n_train):
+        if i < 50:
+            rat.epsilon = 1
+        else:
+            rat.epsilon = epsilon[0] - i * epsilon[1] \
+                if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
+        print(i, rat.epsilon)
+
+        session.phase = 'train'
+        session.experiment(epochs=5)
+
+        session.phase = 'test'
+        session.experiment(epochs=5)
+
+        if (i + 1) % 10 == 0:
+            session.save_png(input_type + '[' + str(epsilon[0]) + ' ' +
+                             str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
+                             train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + 'pos.png')
+
+
 test_worker()
+test_pos_predict(input_type='touch', epsilon=(1, 0.002, 0.1), train_paras='all', wall_reward=0, step_reward=-0.005)
 
 
