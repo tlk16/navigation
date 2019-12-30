@@ -16,15 +16,18 @@ def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wal
     :param train_paras:
     :return:
     """
-    n_train = 500
+    n_train = 600
     rat = Rat(memory_size=1000, input_type=input_type, train_paras=train_paras, device='cuda:1')
     env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
                  limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
     session = Session(rat, env)
     for i in range(n_train):
-        print(i)
-        rat.epsilon = epsilon[0] - i * epsilon[1] \
-            if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
+        if i < 50:
+            rat.epsilon = 1
+        else:
+            rat.epsilon = epsilon[0] - i * epsilon[1] \
+                if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
+        print(i, rat.epsilon)
 
         session.phase = 'train'
         session.experiment(epochs=50)
@@ -35,7 +38,7 @@ def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wal
         if (i + 1) % 20 == 0:
             session.save_png(input_type + '[' + str(epsilon[0]) + ' ' +
                              str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
-                             train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + '.png')
+                             train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + 'last.png')
 
 
 
@@ -46,11 +49,9 @@ def execute():
     """
     pool = multiprocessing.Pool(4)
 
-    for input_type in ['touch']:
-        for train_paras in ['all']:
-            for rewards in [(0, -0.005)]:
-                for epsilon in [(1, 0.002, 0.1), (0.95, 0.002, 0.1), (0.9, 0.002, 0.1), (0.92, 0.002, 0.1)]:
-                    pool.apply_async(worker, (input_type, epsilon, train_paras, rewards[0], rewards[1]))
+    for step_reward in [-0.005, 0, -0.002, -0.01]:
+        for wall_reward in [0, -0.002]:
+            pool.apply_async(worker, ('touch', (1, 0.002, 0.1), 'all', wall_reward, step_reward))
 
     pool.close()
     pool.join()

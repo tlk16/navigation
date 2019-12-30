@@ -407,7 +407,7 @@ if __name__ == '__main__':
             session.phase = 'test'
             session.experiment(epochs=10)
 
-            if (i + 1) % 20 == 0:
+            if (i + 1) % 50 == 0:
                 session.save_png(input_type + '[' + str(epsilon[0]) + ' ' +
                                  str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
                                  train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + 'new.png')
