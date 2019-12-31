@@ -35,9 +35,9 @@ class FakeNN(nn.Module):
     def forward(self, input_, hidden, action):
         # dim should be same except catting dimension
         # print(input_.shape, hidden.shape, action.shape)
-        self.his.append([input_, hidden, action])
-        hidden = torch.ones(1, self.hidden_size)
-        output = torch.FloatTensor([1,0,0,0,0,0,0,0])
+        self.his.append({'input_':input_, 'hidden': hidden, 'action': action})
+        hidden = torch.ones(1, self.hidden_size).to(input_.device)
+        output = torch.FloatTensor([1,0,0,0,0,0,0,0]).to(input_.device)
         return output, hidden
 
     def forward_sequence_values(self, inputs, hidden0, actions):
@@ -79,7 +79,7 @@ class Env:
 
 def test_worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005):
     """
-
+    test rat.remember, _rl_act, _epsilon, _greedy, _init_Action
     :param input_type:
     :param epsilon:
     :param train_paras:
@@ -94,15 +94,28 @@ def test_worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all'
     rat.epsilon = 0
     session.phase = 'train'
     session.episode(epochs=2)
-    # print(session.rat.memory)
+    # print(rat.net.his)
+    # test remember
     assert abs(session.rat.memory[0]['rewards'][0].item() + 0.02) < 1e-3
     assert abs(session.rat.memory[0]['rewards'][5].item() + 0.02) < 1e-3
     assert abs(session.rat.memory[0]['rewards'][4].item() - 1) < 1e-3
-
+    # test _initAction
     assert abs(session.rat.memory[0]['actions'][0].item()) > 1e-3
     assert abs(session.rat.memory[0]['actions'][5].item()) > 1e-3
+    # test _rl_act, _epsilon
+    assert abs(session.rat.memory[0]['actions'][3].item()) < 1e-3
+    assert abs(session.rat.memory[0]['actions'][6].item()) < 1e-3
+    # test int2angle
+    assert torch.dist(session.rat.memory[0]['action_angles'][4], torch.DoubleTensor([1,0]).to(rat.device)).item() < 1e-3
+    assert np.linalg.norm(rat.int2angle(1) - np.array([0.707, 0.707])) < 1e-3
+    # test net input self.last_action, self.hidden
+    assert torch.dist(rat.net.his[0]['input_'], torch.FloatTensor([1, 0, 0, 0]).to(rat.device)).item() < 1e-3
+    assert torch.dist(rat.net.his[5]['input_'], torch.FloatTensor([7, 0, 0, 0]).to(rat.device)).item() < 1e-3
+    assert torch.dist(rat.net.his[0]['hidden'], torch.zeros(1, 512).to(rat.device)).item() < 1e-3
+    assert torch.dist(rat.net.his[4]['hidden'], torch.ones(1, 512).to(rat.device)).item() < 1e-3
+    assert torch.dist(rat.net.his[3]['action'], torch.FloatTensor([1, 0]).to(rat.device)).item() < 1e-3
+    assert torch.dist(rat.net.his[0]['action'], torch.FloatTensor([1, 0]).to(rat.device)).item() > 1e-3
 
-    # print(session.rat.net.his)
 
 def test_RNN():
     pass
@@ -154,6 +167,20 @@ def test_value_back():
 def test_tool():
     pass
 
+def test_area():
+    rat = Rat(memory_size=1000, device='cuda:1', train_stage='pre_train')
+    rat.grid = 2
+    rat.env_limit = 10
+    a = torch.FloatTensor([[[3,3], [3,9], [9,2], [9, 9]]]).to(rat.device)
+    assert torch.dist(rat.area(a), torch.FloatTensor([0,1,2,3]).to(rat.device)).item() < 1e-3
+
+    env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
+                 limit=100, wall_offset=1., touch_offset=2., wall_reward=0, step_reward=0)
+    session = Session(rat, env)
+    assert  session.area(np.array([3,4]), grid=2, env_limit=20) < 1e-3
+    assert session.area(np.array([3, 9]), grid=2, env_limit=20) - 1 < 1e-3
+    assert session.area(np.array([9, 2]), grid=2, env_limit=20) - 2 < 1e-3
+    assert session.area(np.array([9, 9]), grid=2, env_limit=20) - 3 < 1e-3
 
 def test_pos_predict(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005, train_stage='q_learning'):
     """
@@ -164,31 +191,29 @@ def test_pos_predict(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras=
     :return:
     """
     n_train = 500
-    rat = Rat(memory_size=1000, input_type=input_type, train_paras=train_paras, device='cuda:1', train_stage='pre_train')
+    rat = Rat(memory_size=200, input_type=input_type, train_paras=train_paras, device='cuda:1', train_stage='pre_train')
     env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
                  limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
     session = Session(rat, env)
     for i in range(n_train):
-        if i < 50:
-            rat.epsilon = 1
-        else:
-            rat.epsilon = epsilon[0] - i * epsilon[1] \
-                if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
-        print(i, rat.epsilon)
+
+        print(i)
 
         session.phase = 'train'
         session.experiment(epochs=5)
 
         session.phase = 'test'
-        session.experiment(epochs=5)
+        session.experiment(epochs=1)
 
-        if (i + 1) % 10 == 0:
-            session.save_png(input_type + '[' + str(epsilon[0]) + ' ' +
-                             str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
-                             train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + 'pos.png')
+        if (i + 1) % 2 == 0:
+            session.save_png(str(i) + 'pos.png', phase='pre_train')
 
 
+# standard tests
 test_worker()
+test_area()
+
+# new test
 test_pos_predict(input_type='touch', epsilon=(1, 0.002, 0.1), train_paras='all', wall_reward=0, step_reward=-0.005)
 
 

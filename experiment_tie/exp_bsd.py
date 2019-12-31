@@ -24,20 +24,24 @@ class Rat():
         self.train_paras = train_paras
         self.train_stage = train_stage
 
+        self.action_space = 8
+        self.env_limit = 20
+        self.grid = 3
+
+
         self.device = device
 
         if input_type == 'touch':
-            self.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=8).to(device)
+            self.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=self.action_space).to(device)
         elif input_type == 'pos':
-            self.net = RNN(input_size=2, action_size=2, hidden_size=512, output_size=8).to(device)
+            self.net = RNN(input_size=2, action_size=2, hidden_size=512, output_size=self.action_space).to(device)
         else:
             raise TypeError('input tpye wrong')
 
-        self.decoder = Decoder(hidden_size=512, output_size=2).to(device)
+        self.decoder = Decoder(hidden_size=512, output_size=self.grid ** 2).to(device)
         self.lr_rate = 1e-5
-        self.Optimizer_q, self.Optimizer_pos = self._init_optimizer(self.lr_rate)
-
-        self.action_space = 8
+        self.pre_lr_rate = 1e-4
+        self.Optimizer_q, self.Optimizer_pos = self._init_optimizer()
 
         self.memory = []
         self.memory_size = memory_size
@@ -93,12 +97,21 @@ class Rat():
             return random.randint(0, self.action_space - 1)
         return self.last_action
 
-    def _rl_act(self, state):
+    def _rl_act(self, net_output):
+        if self.phase == 'train':
+            action = self._epsilon_choose_action(net_output)
+        elif self.phase == 'test':
+            action = self._greedy_choose_action(net_output)
+        else:
+            raise TypeError('rat.phase wrong')
+        return action
+
+    def _update_hidden(self, state):
         """
-                give action(int) accoring to state
-                :param state: state[2]: array or list shape=[4,]
-                :return:
-                """
+        give action(int) accoring to state
+        :param state: state[2]: array or list shape=[4,]
+        :return:
+        """
         if self.input_type == 'touch':
             input = state[2]
         elif self.input_type == 'pos':
@@ -108,29 +121,23 @@ class Rat():
 
         with torch.no_grad():
             touch = torch.from_numpy(input).float().to(self.device)  # touch.shape = [4,]
-            output, self.hidden_state = self.net(touch, self.hidden_state,
+            net_output, self.hidden_state = self.net(touch, self.hidden_state,
                                                  torch.from_numpy(self.int2angle(self.last_action)).float().to(
                                                      self.device))
-            # output.shape = [1,8] self.hidden_state.shape = [1,512]
-
-        if self.phase == 'train':
-            action = self._epsilon_choose_action(output)
-        elif self.phase == 'test':
-            action = self._greedy_choose_action(output)
-        else:
-            raise TypeError('rat.phase wrong')
-        return action
+        return net_output
 
     def act(self, state):
+        net_output = self._update_hidden(state)
         if self.train_stage == 'pre_train':
             action = self._random_act(state, keep_p=0.4)
         elif self.train_stage == 'q_learning':
-            action = self._rl_act(state)
+            action = self._rl_act(net_output)
         else:
             raise TypeError('train_stage wrong')
 
+        pos_predict = self.decoder(self.hidden_state.to(self.device)).squeeze().detach().cpu().numpy()
         self.last_action = action
-        return action
+        return action, pos_predict
 
     def reset(self, init_net, init_sequence, phase):
         """
@@ -180,24 +187,24 @@ class Rat():
         if len(self.memory) > self.memory_size:
             del self.memory[0:int(self.memory_size/5)]
 
-    def _init_optimizer(self, lr_rate):
+    def _init_optimizer(self):
         if self.train_paras == 'two':
             Optimizer_q = torch.optim.Adam(
                 [
-                    {'params': self.net.h2o, 'lr': lr_rate, 'weight_decay': 0},
-                    {'params': self.net.bo, 'lr': lr_rate, 'weight_decay': 0},
+                    {'params': self.net.h2o, 'lr': self.lr_rate, 'weight_decay': 0},
+                    {'params': self.net.bo, 'lr': self.lr_rate, 'weight_decay': 0},
                 ]
             )
         elif self.train_paras == 'all':
             Optimizer_q = torch.optim.Adam(
                 [
-                    {'params': self.net.i2h, 'lr': lr_rate, 'weight_decay': 0},
-                    {'params': self.net.a2h, 'lr': lr_rate, 'weight_decay': 0},
-                    {'params': self.net.h2h, 'lr': lr_rate, 'weight_decay': 0},
-                    {'params': self.net.bh, 'lr': lr_rate, 'weight_decay': 0},
-                    {'params': self.net.h2o, 'lr': lr_rate, 'weight_decay': 0},
-                    {'params': self.net.bo, 'lr': lr_rate, 'weight_decay': 0},
-                    {'params': self.net.r, 'lr': lr_rate, 'weight_decay': 0},
+                    {'params': self.net.i2h, 'lr': self.lr_rate, 'weight_decay': 0},
+                    {'params': self.net.a2h, 'lr': self.lr_rate, 'weight_decay': 0},
+                    {'params': self.net.h2h, 'lr': self.lr_rate, 'weight_decay': 0},
+                    {'params': self.net.bh, 'lr': self.lr_rate, 'weight_decay': 0},
+                    {'params': self.net.h2o, 'lr': self.lr_rate, 'weight_decay': 0},
+                    {'params': self.net.bo, 'lr': self.lr_rate, 'weight_decay': 0},
+                    {'params': self.net.r, 'lr': self.lr_rate, 'weight_decay': 0},
                 ]
             )
         else:
@@ -205,15 +212,15 @@ class Rat():
 
         Optimizer_pos = torch.optim.Adam(
             [
-                {'params': self.net.i2h, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.a2h, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.h2h, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.bh, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.h2o, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.bo, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.net.r, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.decoder.h2p, 'lr': lr_rate, 'weight_decay': 0},
-                {'params': self.decoder.bp, 'lr': lr_rate, 'weight_decay': 0},
+                {'params': self.net.i2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                {'params': self.net.a2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                {'params': self.net.h2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                {'params': self.net.bh, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                {'params': self.net.h2o, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                {'params': self.net.bo, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                {'params': self.net.r, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                {'params': self.decoder.h2p, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                {'params': self.decoder.bp, 'lr': self.pre_lr_rate, 'weight_decay': 0},
             ]
         )
 
@@ -263,9 +270,12 @@ class Rat():
             hiddens = torch.stack(hiddens).permute((1, 0, 2))
             pos_predicts = self.decoder.forward_sequence_values(hiddens)
             pos_predicts = torch.stack(pos_predicts).permute((1, 0, 2))
-            print(pos_predicts.shape)
+            # print(pos_predicts.shape)
             pos = torch.stack([sequence['positions'] for sequence in train_memory]).float()
-            loss_pos = torch.mean((pos_predicts - pos.detach()) ** 2)
+            pos = self.area(pos).long()
+            loss_pos_layer = torch.nn.CrossEntropyLoss()
+            # print(pos_predicts.reshape((-1, pos_predicts.shape[2])).shape)
+            loss_pos = loss_pos_layer(pos_predicts.reshape((-1, pos_predicts.shape[2])), pos)
 
             loss_pos.backward()
             self.Optimizer_pos.step()
@@ -298,6 +308,18 @@ class Rat():
         g_re.scatter_(2, actions[:, :-1, :], g_sum * (1 - self.lam))
         return g_re
 
+    def area(self, pos):
+        """
+
+        :param pos: tensor [batch_size, step_num, 2]
+        :return:
+        """
+        pos = torch.floor(pos / self.env_limit * self.grid)
+        pos = pos[:, :, 0] * self.grid + pos[:, :, 1]
+        pos = pos.reshape(-1)
+        return pos
+
+
 
 
 class Session:
@@ -307,9 +329,11 @@ class Session:
         self.phase = 'train'
         self.rewards = {'train':[], 'test':[]}
         self.mean_rewards = {'train':[], 'test':[]}
+        self.pos_accuracy = {'train':[], 'test':[]}
 
     def episode(self, epochs=10):
 
+        pos_acc = 0
         for epoch in range(epochs):
             sum_step = 0
             sr = 0
@@ -324,7 +348,9 @@ class Session:
                     break
 
                 while not done:
-                    action = self.rat.act(state)
+                    action, pos_predict = self.rat.act(state)
+                    if self.area(state[0], grid=3, env_limit=self.env.limit) == np.argmax(pos_predict):
+                        pos_acc += 1
                     state, reward, done, _ = self.env.step(self.rat.int2angle(action))
                     sr += reward
                     sum_step += 1
@@ -338,6 +364,8 @@ class Session:
 
         self.mean_rewards[self.phase].append(np.array(self.rewards[self.phase]).mean())
         self.rewards = {'train': [], 'test': []}
+        if self.phase == 'test':
+            self.pos_accuracy['test'].append(pos_acc / (epochs * self.env.limit))
 
     def experiment(self, epochs=10):
         # initialize, might take data during test
@@ -350,23 +378,39 @@ class Session:
         else:
             raise TypeError('session.phase wrong')
 
-    def save_png(self, filename):
+    def save_png(self, filename, phase):
         def smooth(list_a, n=3):
             weights = np.ones(n) / n
             return np.convolve(weights, list_a)[0:-n + 1]
         plt.figure()
-        line1, = plt.plot(self.rat.losses, label='loss')
-        line2, = plt.plot(self.mean_rewards['train'], label='train')
-        line3, = plt.plot(self.mean_rewards['test'], label='test')
-        cum_train = smooth(self.mean_rewards['train'], 10)
-        cum_test = smooth(self.mean_rewards['test'], 10)
-        line4, = plt.plot(cum_train, label='train_cum')
-        line5, = plt.plot(cum_test, label='test_cum')
-        plt.legend(handles=[line1, line2, line3, line4, line5])
+        if phase == 'q_learning':
+            line1, = plt.plot(self.rat.losses, label='loss')
+            line2, = plt.plot(self.mean_rewards['train'], label='train')
+            line3, = plt.plot(self.mean_rewards['test'], label='test')
+            cum_train = smooth(self.mean_rewards['train'], 10)
+            cum_test = smooth(self.mean_rewards['test'], 10)
+            line4, = plt.plot(cum_train, label='train_cum')
+            line5, = plt.plot(cum_test, label='test_cum')
+            plt.legend(handles=[line1, line2, line3, line4, line5])
+        elif phase == 'pre_train':
+            line1, = plt.plot(self.rat.losses, label='loss')
+            line6, = plt.plot(self.pos_accuracy['test'], label='test_pos')
+            plt.legend(handles=[line1, line6])
+        else:
+            raise TypeError('phase wrong')
         plt.savefig(filename)
         plt.ion()
         plt.pause(5)
         plt.close()
+
+    def area(self, pos, grid, env_limit):
+        """
+        caculate the area of a single pos
+        :return:
+        """
+        assert pos.shape == (2,)
+        pos = np.floor(pos / env_limit * grid)
+        return pos[0] * grid + pos[1]
 
 
 
