@@ -40,7 +40,7 @@ class Rat():
 
         self.decoder = Decoder(hidden_size=512, output_size=self.grid ** 2).to(device)
         self.lr_rate = 1e-5
-        self.pre_lr_rate = 1e-4
+        self.pre_lr_rate = 1e-5
         self.Optimizer_q, self.Optimizer_pos = self._init_optimizer()
 
         self.memory = []
@@ -291,14 +291,15 @@ class Rat():
         :param rewards: tensor [50, 100, 1]
         :return:
         """
-        print('value_back', predicts.shape, actions.shape, rewards.shape)
+        assert predicts.shape[0:2] == actions.shape[0:2]
+        assert rewards.shape == actions.shape
         q = torch.unsqueeze(torch.max(predicts[:, 1:, :], 2)[0], 2)  # [5,9,1]  # q_max
         q = q * self.discount + rewards[:, 1:, :]
 
         g_last = q
         g_sum = q.clone()
         # print(g_sum)
-        for i in range(2, 10):
+        for i in range(2, actions.shape[1]):
             g_now = rewards[:, :(-i), :] + self.discount * g_last[:, 1:, :]
             g_sum[:, :(-i + 1), :] += (self.lam ** (i - 1)) * g_now
             g_last = g_now
@@ -382,20 +383,24 @@ class Session:
         def smooth(list_a, n=3):
             weights = np.ones(n) / n
             return np.convolve(weights, list_a)[0:-n + 1]
-        plt.figure()
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        ax2 = ax.twinx()
         if phase == 'q_learning':
-            line1, = plt.plot(self.rat.losses, label='loss')
-            line2, = plt.plot(self.mean_rewards['train'], label='train')
-            line3, = plt.plot(self.mean_rewards['test'], label='test')
+            line1, = ax2.plot(self.rat.losses, label='loss')
+            line2, = ax.plot(self.mean_rewards['train'], label='train')
+            line3, = ax.plot(self.mean_rewards['test'], label='test')
             cum_train = smooth(self.mean_rewards['train'], 10)
             cum_test = smooth(self.mean_rewards['test'], 10)
-            line4, = plt.plot(cum_train, label='train_cum')
-            line5, = plt.plot(cum_test, label='test_cum')
+            line4, = ax.plot(cum_train, label='train_cum')
+            line5, = ax.plot(cum_test, label='test_cum')
             plt.legend(handles=[line1, line2, line3, line4, line5])
         elif phase == 'pre_train':
-            line1, = plt.plot(self.rat.losses, label='loss')
-            line6, = plt.plot(self.pos_accuracy['test'], label='test_pos')
-            plt.legend(handles=[line1, line6])
+            line1, = ax2.plot(self.rat.losses, label='loss', color='b')
+            cum_test_pos = smooth(self.pos_accuracy['test'], 10)
+            line7, = ax.plot(cum_test_pos, label='test_pos_cum', color='g')
+            line6, = ax.plot(self.pos_accuracy['test'], label='test_pos', color='r')
+            plt.legend(handles=[line1, line7, line6])
         else:
             raise TypeError('phase wrong')
         plt.savefig(filename)
@@ -432,7 +437,7 @@ if __name__ == '__main__':
         :param train_paras:
         :return:
         """
-        n_train = 500
+        n_train = 800
         rat = Rat(memory_size=1000, input_type=input_type, train_paras=train_paras, device='cuda:1')
         env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
                      limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
@@ -454,7 +459,7 @@ if __name__ == '__main__':
             if (i + 1) % 50 == 0:
                 session.save_png(input_type + '[' + str(epsilon[0]) + ' ' +
                                  str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
-                                 train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + 'new.png')
+                                 train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + 'new.png', phase='pre_train')
     worker(input_type='touch', epsilon=(1, 0.002, 0.1), train_paras='all', wall_reward=0, step_reward=-0.005)
     # try to train in int-grid situation
     # memory a_t-1, s_t, r_t,
