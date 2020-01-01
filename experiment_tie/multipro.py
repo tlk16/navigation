@@ -2,6 +2,7 @@
 multi-processing for testing super-parameters
 """
 import multiprocessing
+from copy import deepcopy
 import numpy as np
 from matplotlib import pyplot as plt
 from environment import RatEnv
@@ -175,14 +176,15 @@ def execute():
     """
     pool = multiprocessing.Pool(8)
 
-    for pre_lr_rate in [1e-5, 1e-6]:
+    for pre_lr_rate in [1e-5, 1e-4]:
         for keep_p in [0.8, 0.4]:
             for memory_size in [200, 500]:
-                args['rat_args']['keep_p'] = keep_p
-                args['rat_args']['pre_lr_rate'] = pre_lr_rate
-                args['rat_args']['memory_size'] = memory_size
+                used_args = deepcopy(args)
+                used_args['rat_args']['keep_p'] = keep_p
+                used_args['rat_args']['pre_lr_rate'] = pre_lr_rate
+                used_args['rat_args']['memory_size'] = memory_size
                 png_name = 'keep_p' + str(keep_p) + 'pre_lr_rate' + str(pre_lr_rate) + 'memory_size' + str(memory_size)
-                pool.apply_async(worker, (args, png_name))
+                pool.apply_async(worker, (used_args, png_name))
 
     pool.close()
     pool.join()

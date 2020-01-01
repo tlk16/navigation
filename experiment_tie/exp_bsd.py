@@ -407,8 +407,8 @@ class Session:
         elif phase == 'pre_train':
             line1, = ax2.plot(self.rat.losses, label='loss', color='b')
             cum_test_pos = smooth(self.pos_accuracy['test'], 10)
-            line7, = ax.plot(cum_test_pos, label='test_pos_cum', color='r')
             line6, = ax.plot(self.pos_accuracy['test'], label='test_pos', color='g')
+            line7, = ax.plot(cum_test_pos, label='test_pos_cum', color='r')
             plt.legend(handles=[line1, line6, line7])
         else:
             raise TypeError('phase wrong')
@@ -444,3 +444,4 @@ if __name__ == '__main__':
     # old problems of the environment. not serious
     # test of pre_train, not necessary
     # if pre_train is not ok, try to divide train/test dataset
+    # why are multipro processings similar?
