@@ -96,8 +96,8 @@ args = {
     'start': 50,
     'train_epochs': 20,  # if train_epochs larger than rat_args batch_size, experience will be somehow wasted
     'test_epochs': 5,
-    'n_train': 500,
-    'show_time': 10, # save fig per _ step
+    'n_train': 3000,
+    'show_time': 100, # save fig per _ step
 
 }
 
@@ -138,21 +138,51 @@ def worker(args, png_name):
         if (i + 1) % show_time == 0:
             session.save_png(png_name + '.png', phase=args['rat_args']['train_stage'])
 
+def pre_worker(args, png_name):
+    """
 
+    :param input_type:
+    :param epsilon:
+    :param train_paras:
+    :return:
+    """
+    rat = Rat(**args['rat_args'])
+    env = RatEnv(**args['env_args'])
+
+    n_train = args['n_train']
+    epsilon = args['epsilon']
+    train_epochs = args['train_epochs']
+    test_epochs = args['test_epochs']
+    start = args['start']
+    show_time = args['show_time']
+
+    session = Session(rat, env)
+
+    session.phase = 'train'
+    session.episode(epochs=train_epochs)
+    for i in range(train_epochs):
+        session.rat.train()
+
+    session.phase = 'test'
+    session.experiment(epochs=test_epochs)
+
+    session.save_png(png_name + '.png', phase=args['rat_args']['train_stage'])
 
 def execute():
     """
 
     :return:
     """
-    pool = multiprocessing.Pool(4)
+    pool = multiprocessing.Pool(8)
 
     for pre_lr_rate in [1e-5, 1e-6]:
         for keep_p in [0.8, 0.4]:
-            args['rat_args']['keep_p'] = keep_p
-            args['rat_args']['pre_lr_rate'] = pre_lr_rate
-            png_name = 'keep_p' + str(keep_p) + 'pre_lr_rate' + str(pre_lr_rate)
-            pool.apply_async(worker, (args, png_name))
+            for memory_size in [200, 500]:
+                args['rat_args']['keep_p'] = keep_p
+                args['rat_args']['pre_lr_rate'] = pre_lr_rate
+                args['rat_args']['memory_size'] = memory_size
+                png_name = 'keep_p' + str(keep_p) + 'pre_lr_rate' + str(pre_lr_rate) + 'memory_size' + str(memory_size)
+                pool.apply_async(worker, (args, png_name))
 
     pool.close()
     pool.join()

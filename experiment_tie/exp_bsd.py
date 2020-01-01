@@ -409,7 +409,7 @@ class Session:
             cum_test_pos = smooth(self.pos_accuracy['test'], 10)
             line7, = ax.plot(cum_test_pos, label='test_pos_cum', color='r')
             line6, = ax.plot(self.pos_accuracy['test'], label='test_pos', color='g')
-            plt.legend(handles=[line1, line7, line6])
+            plt.legend(handles=[line1, line6, line7])
         else:
             raise TypeError('phase wrong')
         plt.savefig(filename)
