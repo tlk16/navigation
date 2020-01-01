@@ -8,7 +8,7 @@ from environment import RatEnv
 from exp_bsd import Rat, Session
 
 
-def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005):
+def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005, lam=0.3):
     """
 
     :param input_type:
@@ -16,8 +16,9 @@ def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wal
     :param train_paras:
     :return:
     """
-    n_train = 600
+    n_train = 800
     rat = Rat(memory_size=1000, input_type=input_type, train_paras=train_paras, device='cuda:1')
+    rat.lam = lam
     env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
                  limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
     session = Session(rat, env)
@@ -35,10 +36,10 @@ def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wal
         session.phase = 'test'
         session.experiment(epochs=10)
 
-        if (i + 1) % 20 == 0:
-            session.save_png(input_type + '[' + str(epsilon[0]) + ' ' +
+        if (i + 1) % 50 == 0:
+            session.save_png('last ' + input_type + '[' + str(epsilon[0]) + ' ' +
                              str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
-                             train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + 'last.png')
+                             train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + '.png', phase='q_learning')
 
 
 
@@ -49,9 +50,8 @@ def execute():
     """
     pool = multiprocessing.Pool(4)
 
-    for step_reward in [-0.005, 0, -0.002, -0.01]:
-        for wall_reward in [0, -0.002]:
-            pool.apply_async(worker, ('touch', (1, 0.002, 0.1), 'all', wall_reward, step_reward))
+    for lam in [0, 0.3, 0.6, 0.9]:
+        pool.apply_async(worker, ('touch', (1, 0.002, 0.1), 'all', 0, -0.005, lam))
 
     pool.close()
     pool.join()

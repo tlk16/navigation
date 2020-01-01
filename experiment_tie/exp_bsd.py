@@ -17,7 +17,7 @@ class Rat():
     agent reset, (act, remember), train
     """
 
-    def __init__(self, memory_size=1000, input_type='touch', train_paras='two', device='cuda:1', train_stage='q_learning'):
+    def __init__(self, memory_size=1000, lam=0.3, input_type='touch', train_paras='two', device='cuda:1', train_stage='q_learning'):
 
         # parameters useless in the future
         self.input_type = input_type
@@ -48,7 +48,7 @@ class Rat():
 
         # Q-learning parameters
         self.discount = 0.99
-        self.lam = 0.3
+        self.lam = lam
         self.alpha = 0.2
 
         self.batch_size = int(self.memory_size/10)
@@ -335,6 +335,7 @@ class Session:
     def episode(self, epochs=10):
 
         pos_acc = 0
+        pos_num = 0
         for epoch in range(epochs):
             sum_step = 0
             sr = 0
@@ -350,6 +351,7 @@ class Session:
 
                 while not done:
                     action, pos_predict = self.rat.act(state)
+                    pos_num += 1
                     if self.area(state[0], grid=3, env_limit=self.env.limit) == np.argmax(pos_predict):
                         pos_acc += 1
                     state, reward, done, _ = self.env.step(self.rat.int2angle(action))
@@ -366,7 +368,7 @@ class Session:
         self.mean_rewards[self.phase].append(np.array(self.rewards[self.phase]).mean())
         self.rewards = {'train': [], 'test': []}
         if self.phase == 'test':
-            self.pos_accuracy['test'].append(pos_acc / (epochs * self.env.limit))
+            self.pos_accuracy['test'].append(pos_acc / pos_num)
 
     def experiment(self, epochs=10):
         # initialize, might take data during test
@@ -398,8 +400,8 @@ class Session:
         elif phase == 'pre_train':
             line1, = ax2.plot(self.rat.losses, label='loss', color='b')
             cum_test_pos = smooth(self.pos_accuracy['test'], 10)
-            line7, = ax.plot(cum_test_pos, label='test_pos_cum', color='g')
-            line6, = ax.plot(self.pos_accuracy['test'], label='test_pos', color='r')
+            line7, = ax.plot(cum_test_pos, label='test_pos_cum', color='r')
+            line6, = ax.plot(self.pos_accuracy['test'], label='test_pos', color='g')
             plt.legend(handles=[line1, line7, line6])
         else:
             raise TypeError('phase wrong')
@@ -462,10 +464,11 @@ if __name__ == '__main__':
                                  train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + 'new.png', phase='pre_train')
     worker(input_type='touch', epsilon=(1, 0.002, 0.1), train_paras='all', wall_reward=0, step_reward=-0.005)
     # try to train in int-grid situation
-    # memory a_t-1, s_t, r_t,
 
     # memory hundreds~sampling
     # gpu batch
     # just train some weights
     # grid int action
+
+    # problem of value back
 

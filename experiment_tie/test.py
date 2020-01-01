@@ -1,4 +1,4 @@
-
+import math
 import numpy as np
 from itertools import count
 from matplotlib import pyplot as plt
@@ -76,6 +76,54 @@ class Env:
             done = False
         return [np.array([0, 0]), np.array([0]), np.array([self.t, 0, 0, 0])], reward, done, ''
 
+class FakeRat:
+    def __init__(self, goal, limit):
+        pass
+        self.goal = np.array(goal)
+        self.limit = limit
+        self.last_action = None
+        self.losses = []
+
+
+    def reset(self, init_net, init_sequence, phase):
+        pass
+
+    def remember(self, *args):
+        pass
+
+    def train(self, *args):
+        self.losses.append(1)
+
+    def int2angle(self, action):
+        self.action_space = 8
+        angle = action * 2 * math.pi / self.action_space
+        # return np.array([np.sign(math.cos(angle)), np.sign(math.sin(angle))])
+        return np.array([math.cos(angle), math.sin(angle)])
+
+    def act(self, state):
+        direction = np.sign(self.goal - state[0])
+        if direction[0] >= 0 and direction[1] >= 0:
+            action = 1
+        if direction[0] <= 0 and direction[1] >= 0:
+            action = 3
+        if direction[0] <= 0 and direction[1] <= 0:
+            action = 5
+        if direction[0] >= 0 and direction[1] <= 0:
+            action = 7
+        pos_prediction = int(self.area(state[0], grid=3, env_limit=self.limit))
+        a = np.zeros((3*3))
+        a[pos_prediction] = 1
+        return action, pos_prediction
+
+    def area(self, pos, grid, env_limit):
+        """
+        caculate the area of a single pos
+        :return:
+        """
+        assert pos.shape == (2,)
+        pos = np.floor(pos / env_limit * grid)
+        return pos[0] * grid + pos[1]
+
 
 def test_worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005):
     """
@@ -118,6 +166,9 @@ def test_worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all'
 
 
 def test_RNN():
+    pass
+
+def test_Decoder():
     pass
 
 def test_train(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005):
@@ -165,7 +216,24 @@ def test_value_back():
     print(rat.value_back(predicts, actions, rewards))
 
 def test_tool():
-    pass
+    rat = FakeRat(goal=[10, 10], limit=100)
+    env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
+                 limit=100, wall_offset=1., touch_offset=2., wall_reward=0, step_reward=0)
+    session = Session(rat, env)
+    for i in range(100):
+
+        print(i)
+
+        session.phase = 'train'
+        session.experiment(epochs=5)
+
+        session.phase = 'test'
+        session.experiment(epochs=1)
+
+        if (i + 1) % 2 == 0:
+            session.save_png(str(i) + 'test_tool.png', phase='pre_train')
+
+
 
 def test_area():
     rat = Rat(memory_size=1000, device='cuda:1', train_stage='pre_train')
@@ -205,15 +273,16 @@ def test_pos_predict(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras=
         session.phase = 'test'
         session.experiment(epochs=1)
 
-        if (i + 1) % 2 == 0:
+        if (i + 1) % 10 == 0:
             session.save_png(str(i) + 'pos.png', phase='pre_train')
 
 
 # standard tests
-test_worker()
+# test_worker()
 test_area()
-
+# test_tool()
 # new test
+
 test_pos_predict(input_type='touch', epsilon=(1, 0.002, 0.1), train_paras='all', wall_reward=0, step_reward=-0.005)
 
 
