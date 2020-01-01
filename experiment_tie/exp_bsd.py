@@ -339,7 +339,7 @@ class Session:
         self.mean_rewards = {'train':[], 'test':[]}
         self.pos_accuracy = {'train':[], 'test':[]}
 
-    def episode(self, epochs=10):
+    def episode(self, epochs):
 
         pos_acc = 0
         pos_num = 0
@@ -359,7 +359,7 @@ class Session:
                 while not done:
                     action, pos_predict = self.rat.act(state)
                     pos_num += 1
-                    if self.area(state[0], grid=3, env_limit=self.env.limit) == np.argmax(pos_predict):
+                    if self.area(state[0], grid=self.rat.grid, env_limit=self.env.limit) == np.argmax(pos_predict):
                         pos_acc += 1
                     state, reward, done, _ = self.env.step(self.rat.int2angle(action))
                     sr += reward
@@ -377,7 +377,7 @@ class Session:
         if self.phase == 'test':
             self.pos_accuracy['test'].append(pos_acc / pos_num)
 
-    def experiment(self, epochs=10):
+    def experiment(self, epochs):
         # initialize, might take data during test
         if self.phase == 'train':
             self.episode(epochs)
@@ -389,7 +389,7 @@ class Session:
             raise TypeError('session.phase wrong')
 
     def save_png(self, filename, phase):
-        def smooth(list_a, n=3):
+        def smooth(list_a, n):
             weights = np.ones(n) / n
             return np.convolve(weights, list_a)[0:-n + 1]
         fig = plt.figure()
