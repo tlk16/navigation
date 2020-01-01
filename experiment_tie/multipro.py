@@ -97,7 +97,7 @@ args = {
     'start': 50,
     'train_epochs': 20,  # if train_epochs larger than rat_args batch_size, experience will be somehow wasted
     'test_epochs': 5,
-    'n_train': 3000,
+    'n_train': 4000,
     'show_time': 100, # save fig per _ step
 
 }
@@ -174,17 +174,29 @@ def execute():
 
     :return:
     """
-    pool = multiprocessing.Pool(8)
+    pool = multiprocessing.Pool(15)
 
-    for pre_lr_rate in [1e-5, 1e-4]:
-        for keep_p in [0.8, 0.4]:
+    pool.apply_async(worker, (typical_args, 'q_leanring_typical'))
+    for pre_lr_rate in [1e-5, 1e-4, 1e-3]:
+        for keep_p in [0.8]:
             for memory_size in [200, 500]:
-                used_args = deepcopy(args)
-                used_args['rat_args']['keep_p'] = keep_p
-                used_args['rat_args']['pre_lr_rate'] = pre_lr_rate
-                used_args['rat_args']['memory_size'] = memory_size
-                png_name = 'keep_p' + str(keep_p) + 'pre_lr_rate' + str(pre_lr_rate) + 'memory_size' + str(memory_size)
-                pool.apply_async(worker, (used_args, png_name))
+                for train_epochs in [10, 20, 50]:
+                    for batch_size in [50, 100]:
+                        for net_hidden_size in [256, 512]:
+                            used_args = deepcopy(args)
+                            used_args['rat_args']['keep_p'] = keep_p
+                            used_args['rat_args']['pre_lr_rate'] = pre_lr_rate
+                            used_args['rat_args']['memory_size'] = memory_size
+                            used_args['rat_args']['batch_size'] = batch_size
+                            used_args['train_epochs'] = train_epochs
+                            used_args['rat_args']['net_hidden_size'] = net_hidden_size
+                            png_name = 'pre' + \
+                                       'lr' + str(pre_lr_rate) + \
+                                       'memory' + str(memory_size) + \
+                                       'epochs' + str(train_epochs) + \
+                                       'batch' + str(batch_size) + \
+                                       'hidden' + str(net_hidden_size)
+                            pool.apply_async(worker, (used_args, png_name))
 
     pool.close()
     pool.join()
