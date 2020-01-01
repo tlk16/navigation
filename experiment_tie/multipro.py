@@ -25,6 +25,7 @@ args = {
 
         # pre_train
         'pre_lr_rate': 1e-5,
+        'keep_p': 0.8,
 
         # q_learning
         'train_paras': 'all',

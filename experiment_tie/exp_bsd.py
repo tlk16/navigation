@@ -20,7 +20,8 @@ class Rat():
 
     def __init__(self, input_type, train_paras, device, train_stage,
                  action_space, env_limit, grid,
-                 net_hidden_size, memory_size, batch_size, lr_rate, pre_lr_rate,
+                 net_hidden_size, memory_size, batch_size, lr_rate,
+                 pre_lr_rate, keep_p,
                  discount, lam):
 
         # parameters useless in the future
@@ -31,7 +32,6 @@ class Rat():
         self.action_space = action_space
         self.env_limit = env_limit
         self.grid = grid
-
 
         self.device = device
 
@@ -51,6 +51,8 @@ class Rat():
 
         self.memory = []
         self.memory_size = memory_size
+
+        self.keep_p = keep_p
 
         # Q-learning parameters
         self.discount = discount
@@ -96,9 +98,9 @@ class Rat():
     def _initAction(self):
         return random.randint(0, self.action_space - 1)
 
-    def _random_act(self, state, keep_p=0.4):
+    def _random_act(self, state):
         # print(np.mean(np.array(state[2]) - np.zeros(4)))
-        if np.mean(np.array(state[2]) - np.zeros(4)) > 1e-3 or random.random() > keep_p:
+        if np.mean(np.array(state[2]) - np.zeros(4)) > 1e-3 or random.random() > self.keep_p:
             return random.randint(0, self.action_space - 1)
         return self.last_action
 
@@ -133,7 +135,7 @@ class Rat():
     def act(self, state):
         net_output = self._update_hidden(state)
         if self.train_stage == 'pre_train':
-            action = self._random_act(state, keep_p=0.4)
+            action = self._random_act(state)
         elif self.train_stage == 'q_learning':
             action = self._rl_act(net_output)
         else:
