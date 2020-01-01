@@ -431,13 +431,6 @@ class Session:
 
 if __name__ == '__main__':
     pass
-    # parameters
-    # q-learning lamda discount alpha
-    # memory size
-    # lr_rate
-    # epsilon
-    # trained parameters
-    # env limit dim goal
 
     # try to train in int-grid situation
 
@@ -447,3 +440,7 @@ if __name__ == '__main__':
     # grid int action
 
     # problem of value back
+    # update environment, touch signal in the corner
+    # old problems of the environment. not serious
+    # test of pre_train, not necessary
+    # if pre_train is not ok, try to divide train/test dataset
