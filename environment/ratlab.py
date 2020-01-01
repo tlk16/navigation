@@ -181,7 +181,8 @@ def __drawcall__( i ):
     glutPostRedisplay()
     glutTimerFunc( 0, __drawcall__, 1 )
     
-def __display__(ctrl):
+def display(ctrl):
+    # the real display function
     
     # main reset
     glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
@@ -278,8 +279,54 @@ def __display__(ctrl):
             
     #------------------------------------------------------------[ end drawing ]
     glutSwapBuffers()
- 
 
+
+def __display__(ctrl):
+    # main reset
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    glBindTexture(GL_TEXTURE_2D, 0)
+
+    # get rat's next state
+    if ctrl.state.initAction is not None:
+        randomChoose = False
+    else:
+        randomChoose = True
+    rat_state = ctrl.modules.rat.nextPathStep(randomChoose,
+                                              ctrl.state.initAction)  # pos_next, pos_next-pos, touch, reward
+
+    if True:
+
+        # ---------------------------------------------------[ simulation recording ]
+        # read out current rat view image
+        # opengl_buffer = glReadPixels( ctrl.defines.window_width/2 - ctrl.setup.rat.fov[0]/2*ctrl.options.ratview_scale,
+        #                              80, ctrl.setup.rat.fov[0], ctrl.setup.rat.fov[1], GL_RGBA, GL_UNSIGNED_BYTE )
+        #
+        # ctrl.state.last_view  = img.frombuffer( 'RGBA', (int(ctrl.setup.rat.fov[0]),int(ctrl.setup.rat.fov[1])),
+        #                                        opengl_buffer, 'raw', 'RGBA', 0, 0 )
+
+        ctrl.save.nextPos = rat_state[0]
+
+        if rat_state[1][0] < 1e-5 and rat_state[1][0] > 0:
+            rat_state[1][0] = 0.
+        elif rat_state[1][1] < 1e-5 and rat_state[1][1] > 0:
+            rat_state[1][1] = 0.
+        ctrl.save.act = rat_state[1]
+        ctrl.save.touch = rat_state[2]
+        ctrl.save.reward = rat_state[3]
+        ctrl.state.step += 1
+
+        if ctrl.save.isSave:
+            collect(ctrl)
+
+        # runtime limit
+        if (ctrl.config.limit != None and ctrl.state.step == ctrl.config.limit) or ctrl.save.reward:
+            ctrl.save.done = True
+
+    # ------------------------------------------------------------[ end drawing ]
+    # glutSwapBuffers()
+
+
+# =======================================================================[ Collect ]
 #=======================================================================[ Collect ]
 
 def collect(ctrl):
