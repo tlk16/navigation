@@ -15,6 +15,7 @@ import torch.utils.data
 from environment import RatEnv
 from RNN import RNN
 from exp_bsd import Rat, Session
+from multipro import args
 
 
 class FakeNN(nn.Module):
@@ -55,7 +56,7 @@ class FakeNN(nn.Module):
     def initHidden(self, batchsize=1):
         return torch.zeros(batchsize, self.hidden_size)
 
-class Env:
+class FakeEnv:
     def __init__(self):
         self.limit = 10
         self.t = 0
@@ -125,7 +126,7 @@ class FakeRat:
         return pos[0] * grid + pos[1]
 
 
-def test_worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005):
+def test_rat():
     """
     test rat.remember, _rl_act, _epsilon, _greedy, _init_Action
     :param input_type:
@@ -133,16 +134,16 @@ def test_worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all'
     :param train_paras:
     :return:
     """
-    n_train = 1
-    rat = Rat(memory_size=200, input_type=input_type, train_paras=train_paras)
+    rat = Rat(**args['rat_args'])
     rat.net = FakeNN(input_size=4, action_size=2, hidden_size=512, output_size=8).to(rat.device)
-    env = Env()
+    env = FakeEnv()
     session = Session(rat, env)
 
     rat.epsilon = 0
     session.phase = 'train'
     session.episode(epochs=2)
     # print(rat.net.his)
+
     # test remember
     assert abs(session.rat.memory[0]['rewards'][0].item() + 0.02) < 1e-3
     assert abs(session.rat.memory[0]['rewards'][5].item() + 0.02) < 1e-3
@@ -182,7 +183,7 @@ def test_train(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all',
     n_train = 1
     rat = Rat(memory_size=200, input_type=input_type, train_paras=train_paras)
     rat.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=8).to(rat.device)
-    env = Env()
+    env = FakeEnv()
     session = Session(rat, env)
 
     rat.epsilon = 0
@@ -220,7 +221,7 @@ def test_tool():
     env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
                  limit=100, wall_offset=1., touch_offset=2., wall_reward=0, step_reward=0)
     session = Session(rat, env)
-    for i in range(100):
+    for i in range(3):
 
         print(i)
 
@@ -231,12 +232,17 @@ def test_tool():
         session.experiment(epochs=1)
 
         if (i + 1) % 2 == 0:
-            session.save_png(str(i) + 'test_tool.png', phase='pre_train')
-
+            session.save_png(str(i) + 'test_tool.png', phase='q_learning')
+        for item in session.mean_rewards['train']:
+            assert item > 10
+        for item in session.mean_rewards['test']:
+            assert item > 9
+        for item in session.pos_accuracy['test']:
+            assert abs(item - 1) < 1e-3
 
 
 def test_area():
-    rat = Rat(memory_size=1000, device='cuda:1', train_stage='pre_train')
+    rat = Rat(**args['rat_args'])
     rat.grid = 2
     rat.env_limit = 10
     a = torch.FloatTensor([[[3,3], [3,9], [9,2], [9, 9]]]).to(rat.device)
@@ -250,39 +256,13 @@ def test_area():
     assert session.area(np.array([9, 2]), grid=2, env_limit=20) - 2 < 1e-3
     assert session.area(np.array([9, 9]), grid=2, env_limit=20) - 3 < 1e-3
 
-def test_pos_predict(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005, train_stage='q_learning'):
-    """
-
-    :param input_type:
-    :param epsilon:
-    :param train_paras:
-    :return:
-    """
-    n_train = 500
-    rat = Rat(memory_size=200, input_type=input_type, train_paras=train_paras, device='cuda:1', train_stage='pre_train')
-    env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
-                 limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
-    session = Session(rat, env)
-    for i in range(n_train):
-
-        print(i)
-
-        session.phase = 'train'
-        session.experiment(epochs=5)
-
-        session.phase = 'test'
-        session.experiment(epochs=1)
-
-        if (i + 1) % 10 == 0:
-            session.save_png(str(i) + 'pos.png', phase='pre_train')
 
 
 # standard tests
-# test_worker()
+test_rat()
 test_area()
-# test_tool()
-# new test
+test_tool()
 
-test_pos_predict(input_type='touch', epsilon=(1, 0.002, 0.1), train_paras='all', wall_reward=0, step_reward=-0.005)
+# new test
 
 

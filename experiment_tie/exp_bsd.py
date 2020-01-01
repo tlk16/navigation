@@ -17,44 +17,46 @@ class Rat():
     agent reset, (act, remember), train
     """
 
-    def __init__(self, memory_size=1000, lam=0.3, input_type='touch', train_paras='two', device='cuda:1', train_stage='q_learning'):
+    def __init__(self, input_type, train_paras, device, train_stage,
+                 action_space, env_limit, grid,
+                 net_hidden_size, memory_size, batch_size, lr_rate, pre_lr_rate,
+                 discount, lam):
 
         # parameters useless in the future
         self.input_type = input_type
         self.train_paras = train_paras
         self.train_stage = train_stage
 
-        self.action_space = 8
-        self.env_limit = 20
-        self.grid = 3
+        self.action_space = action_space
+        self.env_limit = env_limit
+        self.grid = grid
 
 
         self.device = device
 
         if input_type == 'touch':
-            self.net = RNN(input_size=4, action_size=2, hidden_size=512, output_size=self.action_space).to(device)
+            self.net = RNN(input_size=4, action_size=2, hidden_size=net_hidden_size, output_size=self.action_space).to(device)
         elif input_type == 'pos':
-            self.net = RNN(input_size=2, action_size=2, hidden_size=512, output_size=self.action_space).to(device)
+            self.net = RNN(input_size=2, action_size=2, hidden_size=net_hidden_size, output_size=self.action_space).to(device)
         else:
             raise TypeError('input tpye wrong')
 
-        self.decoder = Decoder(hidden_size=512, output_size=self.grid ** 2).to(device)
-        self.lr_rate = 1e-5
-        self.pre_lr_rate = 1e-5
+        self.decoder = Decoder(hidden_size=net_hidden_size, output_size=self.grid ** 2).to(device)
+        self.lr_rate = lr_rate
+        self.pre_lr_rate = pre_lr_rate
         self.Optimizer_q, self.Optimizer_pos = self._init_optimizer()
 
         self.memory = []
         self.memory_size = memory_size
 
         # Q-learning parameters
-        self.discount = 0.99
+        self.discount = discount
         self.lam = lam
-        self.alpha = 0.2
 
-        self.batch_size = int(self.memory_size/10)
+        self.batch_size = batch_size
 
         # changed
-        self.epsilon = 0.5
+        self.epsilon = None
 
         self.hidden_state = self.net.initHidden().to(device)
         self.last_action = self._initAction()
@@ -423,6 +425,7 @@ class Session:
 
 
 if __name__ == '__main__':
+    pass
     # parameters
     # q-learning lamda discount alpha
     # memory size
@@ -431,38 +434,6 @@ if __name__ == '__main__':
     # trained parameters
     # env limit dim goal
 
-    def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005):
-        """
-
-        :param input_type:
-        :param epsilon:
-        :param train_paras:
-        :return:
-        """
-        n_train = 800
-        rat = Rat(memory_size=1000, input_type=input_type, train_paras=train_paras, device='cuda:1')
-        env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
-                     limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
-        session = Session(rat, env)
-        for i in range(n_train):
-            if i < 50:
-                rat.epsilon = 1
-            else:
-                rat.epsilon = epsilon[0] - i * epsilon[1] \
-                    if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
-            print(i, rat.epsilon)
-
-            session.phase = 'train'
-            session.experiment(epochs=50)
-
-            session.phase = 'test'
-            session.experiment(epochs=10)
-
-            if (i + 1) % 50 == 0:
-                session.save_png(input_type + '[' + str(epsilon[0]) + ' ' +
-                                 str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
-                                 train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + 'new.png', phase='pre_train')
-    worker(input_type='touch', epsilon=(1, 0.002, 0.1), train_paras='all', wall_reward=0, step_reward=-0.005)
     # try to train in int-grid situation
 
     # memory hundreds~sampling

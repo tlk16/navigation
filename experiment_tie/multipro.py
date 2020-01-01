@@ -7,8 +7,53 @@ from matplotlib import pyplot as plt
 from environment import RatEnv
 from exp_bsd import Rat, Session
 
+args = {
+    'rat_args':{
+        'input_type': 'touch',
+        'device': 'cuda:1',
+        'train_stage': 'q_learning',
 
-def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wall_reward=0.0, step_reward=-0.005, lam=0.3):
+        # knowledge about environment
+        'action_space': 8,
+        'env_limit': 15,
+        'grid': 3,
+
+        # settings used by pre_train and q_learning
+        'net_hidden_size': 512,
+        'memory_size': 1000,
+        'batch_size': 100,    # typically memory_size/10
+
+        # pre_train
+        'pre_lr_rate': 1e-5,
+
+        # q_learning
+        'train_paras': 'all',
+        'lr_rate': 1e-5,
+        'discount': 0.99,
+        'lam': 0.3,
+    },
+
+    'env_args':{
+        'wall_reward': 0.0,
+        'step_reward': -0.005,
+        'dim': [15, 15, 100],
+        'speed': 1.,
+        'collect': False,
+        'goal': [10, 10, 1],
+        'limit': 100,
+        'wall_offset': 1., # > 1
+        'touch_offset': 2., # > 1
+    },
+
+    'epsilon': [1, 0.002, 0.1],
+    'start': 50,
+    'train_epochs': 50,
+    'test_epochs': 10,
+    'n_train': 800
+}
+
+
+def worker(args, png_name):
     """
 
     :param input_type:
@@ -16,14 +61,18 @@ def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wal
     :param train_paras:
     :return:
     """
-    n_train = 800
-    rat = Rat(memory_size=1000, input_type=input_type, train_paras=train_paras, device='cuda:1')
-    rat.lam = lam
-    env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
-                 limit=100, wall_offset=1., touch_offset=2., wall_reward=wall_reward, step_reward=step_reward)
+    rat = Rat(**args['rat_args'])
+    env = RatEnv(**args['env_args'])
+
+    n_train = args['n_train']
+    epsilon = args['epsilon']
+    train_epochs = args['train_epochs']
+    test_epochs = args['test_epochs']
+    start = args['start']
+
     session = Session(rat, env)
     for i in range(n_train):
-        if i < 50:
+        if i < start:
             rat.epsilon = 1
         else:
             rat.epsilon = epsilon[0] - i * epsilon[1] \
@@ -31,15 +80,13 @@ def worker(input_type='touch', epsilon=(0.9, 0.002, 0.1), train_paras='all', wal
         print(i, rat.epsilon)
 
         session.phase = 'train'
-        session.experiment(epochs=50)
+        session.experiment(epochs=train_epochs)
 
         session.phase = 'test'
-        session.experiment(epochs=10)
+        session.experiment(epochs=test_epochs)
 
         if (i + 1) % 50 == 0:
-            session.save_png('last ' + input_type + '[' + str(epsilon[0]) + ' ' +
-                             str(epsilon[1]) + ' ' + str(epsilon[2]) + ']' +
-                             train_paras + ' ' + str(wall_reward) + str(step_reward) + str(i) + '.png', phase='q_learning')
+            session.save_png(png_name + ' i.png', phase=args['rat_args']['train_stage'])
 
 
 
@@ -51,7 +98,8 @@ def execute():
     pool = multiprocessing.Pool(4)
 
     for lam in [0, 0.3, 0.6, 0.9]:
-        pool.apply_async(worker, ('touch', (1, 0.002, 0.1), 'all', 0, -0.005, lam))
+        args['rat_args']['lam'] = lam
+        pool.apply_async(worker, (args, 'lam' + str(lam)))
 
     pool.close()
     pool.join()
