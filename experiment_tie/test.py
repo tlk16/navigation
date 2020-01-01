@@ -234,7 +234,7 @@ def test_tool():
         if (i + 1) % 2 == 0:
             session.save_png(str(i) + 'test_tool.png', phase='q_learning')
         for item in session.mean_rewards['train']:
-            assert item > 10
+            assert item > 9
         for item in session.mean_rewards['test']:
             assert item > 9
         for item in session.pos_accuracy['test']:

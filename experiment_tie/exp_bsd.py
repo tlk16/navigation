@@ -1,16 +1,17 @@
-import sys
+"""
+class Rat and Session, core precess of RL
+"""
+import random
 import math
 import numpy as np
-import random
 
 import torch.optim as optim
 import torch
 import torch.utils.data
 
-from RNN import RNN, Decoder
-from environment import RatEnv
 from matplotlib import pyplot as plt
 
+from RNN import RNN, Decoder
 
 class Rat():
     """
@@ -35,16 +36,18 @@ class Rat():
         self.device = device
 
         if input_type == 'touch':
-            self.net = RNN(input_size=4, action_size=2, hidden_size=net_hidden_size, output_size=self.action_space).to(device)
+            self.net = RNN(input_size=4, action_size=2,
+                           hidden_size=net_hidden_size, output_size=self.action_space).to(device)
         elif input_type == 'pos':
-            self.net = RNN(input_size=2, action_size=2, hidden_size=net_hidden_size, output_size=self.action_space).to(device)
+            self.net = RNN(input_size=2, action_size=2,
+                           hidden_size=net_hidden_size, output_size=self.action_space).to(device)
         else:
             raise TypeError('input tpye wrong')
 
         self.decoder = Decoder(hidden_size=net_hidden_size, output_size=self.grid ** 2).to(device)
         self.lr_rate = lr_rate
         self.pre_lr_rate = pre_lr_rate
-        self.Optimizer_q, self.Optimizer_pos = self._init_optimizer()
+        self.optimizer_q, self.optimizer_pos = self._init_optimizer()
 
         self.memory = []
         self.memory_size = memory_size
@@ -124,8 +127,7 @@ class Rat():
         with torch.no_grad():
             touch = torch.from_numpy(input).float().to(self.device)  # touch.shape = [4,]
             net_output, self.hidden_state = self.net(touch, self.hidden_state,
-                                                 torch.from_numpy(self.int2angle(self.last_action)).float().to(
-                                                     self.device))
+                                                     torch.from_numpy(self.int2angle(self.last_action)).float().to(self.device))
         return net_output
 
     def act(self, state):
@@ -137,7 +139,8 @@ class Rat():
         else:
             raise TypeError('train_stage wrong')
 
-        pos_predict = self.decoder(self.hidden_state.to(self.device)).squeeze().detach().cpu().numpy()
+        pos_predict = self.decoder(self.hidden_state.to(self.device))\
+            .squeeze().detach().cpu().numpy()
         self.last_action = action
         return action, pos_predict
 
@@ -191,14 +194,14 @@ class Rat():
 
     def _init_optimizer(self):
         if self.train_paras == 'two':
-            Optimizer_q = torch.optim.Adam(
+            optimizer_q = torch.optim.Adam(
                 [
                     {'params': self.net.h2o, 'lr': self.lr_rate, 'weight_decay': 0},
                     {'params': self.net.bo, 'lr': self.lr_rate, 'weight_decay': 0},
                 ]
             )
         elif self.train_paras == 'all':
-            Optimizer_q = torch.optim.Adam(
+            optimizer_q = torch.optim.Adam(
                 [
                     {'params': self.net.i2h, 'lr': self.lr_rate, 'weight_decay': 0},
                     {'params': self.net.a2h, 'lr': self.lr_rate, 'weight_decay': 0},
@@ -212,7 +215,7 @@ class Rat():
         else:
             raise TypeError('train paras wrong')
 
-        Optimizer_pos = torch.optim.Adam(
+        optimizer_pos = torch.optim.Adam(
             [
                 {'params': self.net.i2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
                 {'params': self.net.a2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
@@ -226,7 +229,7 @@ class Rat():
             ]
         )
 
-        return Optimizer_q, Optimizer_pos
+        return optimizer_q, optimizer_pos
 
     def train(self):
 
@@ -235,8 +238,8 @@ class Rat():
         else:
             train_memory = self.memory
 
-        self.Optimizer_q.zero_grad()
-        self.Optimizer_pos.zero_grad()
+        self.optimizer_q.zero_grad()
+        self.optimizer_pos.zero_grad()
 
         if self.input_type == 'touch':
             inputs = torch.stack([sequence['touches'] for sequence in train_memory])
@@ -265,7 +268,7 @@ class Rat():
 
             loss_q = torch.mean((q_predicts[:, :-1, :] - Qs.detach()) ** 2)
             loss_q.backward()
-            self.Optimizer_q.step()
+            self.optimizer_q.step()
             self.losses.append(loss_q.detach().item())
 
         elif self.train_stage == 'pre_train':
@@ -280,7 +283,7 @@ class Rat():
             loss_pos = loss_pos_layer(pos_predicts.reshape((-1, pos_predicts.shape[2])), pos)
 
             loss_pos.backward()
-            self.Optimizer_pos.step()
+            self.optimizer_pos.step()
             self.losses.append(loss_pos.detach().item())
         else:
             raise TypeError('train stage wrong')
@@ -342,7 +345,7 @@ class Session:
             sum_step = 0
             sr = 0
             while sum_step < self.env.limit:
-                self.rat.reset(init_net=(sum_step==0), init_sequence=(sum_step==0), phase=self.phase)
+                self.rat.reset(init_net=(sum_step == 0), init_sequence=(sum_step == 0), phase=self.phase)
                 state, reward, done, _ = self.env.reset()
                 sr += reward
                 sum_step += 1
@@ -442,4 +445,3 @@ if __name__ == '__main__':
     # grid int action
 
     # problem of value back
-
