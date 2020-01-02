@@ -54,7 +54,8 @@ typical_args = {    # typical args of q_learning
     'start': 50,
     'train_epochs': 50,
     'test_epochs': 10,
-    'n_train': 800
+    'n_train': 4000,
+    'show_time': 100
 }
 
 args = {
@@ -141,6 +142,7 @@ def worker(args, png_name):
 
         if (i + 1) % show_time == 0:
             session.save_png(png_name + '.png', phase=args['rat_args']['train_stage'])
+
     print('over', os.getpid())
 
 def pre_worker(args, png_name, memory):
@@ -263,4 +265,5 @@ def pre_execute():
     pool.join()
 
 if __name__ == '__main__':
-    pre_execute()
+    worker(typical_args, 'q_leanring_typical')
+    execute()

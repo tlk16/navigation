@@ -70,7 +70,7 @@ class RNN(nn.Module):
     
 
     def initHidden(self, batchsize = 1):
-        return Variable(torch.zeros(batchsize, self.hidden_size))
+        return Variable(torch.randn(batchsize, self.hidden_size))
     
     @ staticmethod
     def crossentropy(predict, target, batch_size, beta = 1e-2):
