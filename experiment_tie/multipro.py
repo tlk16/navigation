@@ -115,35 +115,37 @@ def worker(args, png_name):
     :param train_paras:
     :return:
     """
-    rat = Rat(**args['rat_args'])
-    env = RatEnv(**args['env_args'])
+    try:
+        rat = Rat(**args['rat_args'])
+        env = RatEnv(**args['env_args'])
 
-    n_train = args['n_train']
-    epsilon = args['epsilon']
-    train_epochs = args['train_epochs']
-    test_epochs = args['test_epochs']
-    start = args['start']
-    show_time = args['show_time']
+        n_train = args['n_train']
+        epsilon = args['epsilon']
+        train_epochs = args['train_epochs']
+        test_epochs = args['test_epochs']
+        start = args['start']
+        show_time = args['show_time']
 
-    session = Session(rat, env)
-    for i in range(n_train):
-        if i < start:
-            rat.epsilon = 1
-        else:
-            rat.epsilon = epsilon[0] - i * epsilon[1] \
-                if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
-        print(i, rat.epsilon)
+        session = Session(rat, env)
+        for i in range(n_train):
+            if i < start:
+                rat.epsilon = 1
+            else:
+                rat.epsilon = epsilon[0] - i * epsilon[1] \
+                    if epsilon[0] - i * epsilon[1] > epsilon[2] else epsilon[2]
+            print(i, rat.epsilon)
 
-        session.phase = 'train'
-        session.experiment(epochs=train_epochs)
+            session.phase = 'train'
+            session.experiment(epochs=train_epochs)
 
-        session.phase = 'test'
-        session.experiment(epochs=test_epochs)
+            session.phase = 'test'
+            session.experiment(epochs=test_epochs)
 
-        if (i + 1) % show_time == 0:
-            session.save_png(png_name + '.png', phase=args['rat_args']['train_stage'])
-
-    print('over', os.getpid())
+            if (i + 1) % show_time == 0:
+                session.save_png(png_name + '.png', phase=args['rat_args']['train_stage'])
+    except Exception as e:
+        print(e)
+        print('over', os.getpid())
 
 def pre_worker(args, png_name, memory):
     """
