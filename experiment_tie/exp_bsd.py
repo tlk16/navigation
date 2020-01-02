@@ -160,7 +160,7 @@ class Rat():
             self.sequence = {
                 'hidden0': self.hidden_state,
                 'positions': [],
-                'observations': [],
+                # 'observations': [],
                 'touches': [],
                 'rewards': [],
                 'actions': []
@@ -344,6 +344,7 @@ class Session:
         pos_acc = 0
         pos_num = 0
         for epoch in range(epochs):
+            print(epoch)
             sum_step = 0
             sr = 0
             while sum_step < self.env.limit:
