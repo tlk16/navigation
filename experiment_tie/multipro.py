@@ -3,6 +3,7 @@ multi-processing for testing super-parameters
 """
 import os
 import time
+import random
 import pickle
 import multiprocessing
 from copy import deepcopy
@@ -147,7 +148,7 @@ def worker(args, png_name):
         print(e)
         print('over', os.getpid())
 
-def pre_worker(args, png_name, memory):
+def pre_worker(args, png_name):
     """
 
     :param input_type:
@@ -156,49 +157,65 @@ def pre_worker(args, png_name, memory):
     :return:
     """
     # batch_size, memory_size > 100000, pre_lr_rate
-    for sequence in memory:
-        for k in sequence:
-            sequence[k] = sequence[k].to(args['rat_args']['device'])
 
     rat = Rat(**args['rat_args'])
-    rat.memory = memory
     env = RatEnv(**args['env_args'])
 
     session = Session(rat, env)
 
-    for i in range(20000):
-        session.phase = 'train'
-        session.rat.train()
+    files = []
+    for filename in os.listdir(os.getcwd()):
+        if filename.startswith('memory'):
+            files.append(filename)
+    try:
+        for i in range(20000):
+            print(i)
 
-        session.phase = 'test'
-        session.experiment(epochs=2)
-        if i % 1000 == 0:
-            session.save_png(png_name + '.png', phase=args['rat_args']['train_stage'])
+            file = random.choice(files)
+            with open(file, 'rb') as f:
+                memory = pickle.load(f)
+            for sequence in memory:
+                for k in sequence:
+                    sequence[k] = sequence[k].to(args['rat_args']['device'])
+            session.rat.memory = memory
+
+            session.phase = 'train'
+            session.rat.train()
+
+            session.phase = 'test'
+            session.experiment(epochs=2)
+            if i % 100 == 0:
+                session.save_png(png_name + '.png', phase=args['rat_args']['train_stage'])
+    except Exception as e:
+        print(e)
 
 def get_data(q):
-    args['rat_args']['memory_size'] = 10000000
+    args['rat_args']['memory_size'] = 10000000  # modify global
+
     rat = Rat(**args['rat_args'])
     env = RatEnv(**args['env_args'])
 
     session = Session(rat, env)
 
     session.phase = 'train'
-    session.episode(epochs=150)
-    time.sleep(int(os.getpid()/100))
+    session.episode(epochs=3000)
+    time.sleep(int(os.getpid()/1000))
+    print('run is ok')
     for sequence in session.rat.memory:
         for k in sequence:
             sequence[k] = sequence[k].to('cpu')
     print('to cpu is ok')
-    q.put(session.rat.memory)
+    time.sleep(int(os.getpid() / 100))
+    with open('memory' + str(os.getpid()) + '.pkl', 'wb') as f:
+        pickle.dump(session.rat.memory, f)
 
 def execute():
     """
 
     :return:
     """
-    pool = multiprocessing.Pool(12)
+    pool = multiprocessing.Pool(8)
 
-    pool.apply_async(worker, (typical_args, 'q_leanring_typical'))
     for pre_lr_rate in [1e-3, 1e-4, 1e-5]:
         for keep_p in [0.8]:
             for memory_size in [200, 500]:
@@ -228,22 +245,14 @@ def pre_execute():
 
     :return:
     """
-    data_pool = multiprocessing.Pool(12)
-    q = multiprocessing.Manager().Queue()
-    for i in range(12):
-        print(i)
-        data_pool.apply_async(get_data, (q,))
-    data_pool.close()
-    data_pool.join()
-
-    memory = []
-    while not q.empty():
-        m = q.get()
-        memory.extend(m)
-    print('dataset', len(memory))
-
-    with open('memory.pkl', 'wb') as f:
-        pickle.dump(memory, f)
+    # data_pool = multiprocessing.Pool(8)
+    # q = multiprocessing.Manager().Queue()
+    # for i in range(8):
+    #     print(i)
+    #     data_pool.apply_async(get_data, (q,))
+    # data_pool.close()
+    # data_pool.join()
+    # print('ok')
 
     pool = multiprocessing.Pool(9)
     for pre_lr_rate in [1e-3, 1e-4, 1e-5]:
@@ -261,11 +270,10 @@ def pre_execute():
                                    'lr' + str(pre_lr_rate) + \
                                    'batch' + str(batch_size) + \
                                    'hidden' + str(net_hidden_size)
-                        pool.apply_async(pre_worker, (used_args, png_name, deepcopy(memory)))
+                        pool.apply_async(pre_worker, (used_args, png_name))
 
     pool.close()
     pool.join()
 
 if __name__ == '__main__':
-    worker(typical_args, 'q_leanring_typical')
-    execute()
+    pre_execute()
