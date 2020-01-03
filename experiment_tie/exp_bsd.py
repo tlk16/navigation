@@ -287,7 +287,8 @@ class Rat():
             loss_pos.backward()
             self.optimizer_pos.step()
             self.losses.append(loss_pos.detach().item())
-            print('train accuracy', torch.eq(torch.argmax(pos_predicts, 2).reshape(-1), pos).sum().float().item() / torch.numel(pos_predicts))
+            print('train accuracy', torch.eq(torch.argmax(pos_predicts.reshape(-1, pos_predicts.shape[2]), 1), pos)
+                  .sum().float().item() / torch.numel(pos))
         else:
             raise TypeError('train stage wrong')
 
