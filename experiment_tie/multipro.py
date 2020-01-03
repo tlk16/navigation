@@ -168,7 +168,7 @@ def pre_worker(args, png_name):
             if filename.startswith('memory'):
                 files.append(filename)
 
-        for i in range(20000):
+        for i in range(30000):
             print(i)
 
             file = random.choice(files)
@@ -259,14 +259,13 @@ def pre_execute():
         for keep_p in [0.8]:
             for memory_size in [180000]:
                 for batch_size in [50, 100, 200]:
-                    for net_hidden_size, device in zip([1024, 512], ['cuda:1', 'cuda:0']):
+                    for net_hidden_size in [512]:
                         used_args = deepcopy(args)
                         used_args['rat_args']['keep_p'] = keep_p
                         used_args['rat_args']['pre_lr_rate'] = pre_lr_rate
                         used_args['rat_args']['memory_size'] = memory_size
                         used_args['rat_args']['batch_size'] = batch_size
                         used_args['rat_args']['net_hidden_size'] = net_hidden_size
-                        used_args['rat_args']['device'] = device
                         png_name = 'pre' + \
                                    'lr' + str(pre_lr_rate) + \
                                    'batch' + str(batch_size) + \
@@ -282,6 +281,6 @@ if __name__ == '__main__':
     # used_args['rat_args']['pre_lr_rate'] = 1e-3
     # used_args['rat_args']['memory_size'] = 1000
     # used_args['rat_args']['batch_size'] = 200
-    # used_args['rat_args']['net_hidden_size'] = 512
-    # pre_worker(args, 'hh')
+    # used_args['rat_args']['net_hidden_size'] = 1024
+    # pre_worker(used_args, 'hh')
     pre_execute()
