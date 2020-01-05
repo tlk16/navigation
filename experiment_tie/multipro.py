@@ -92,7 +92,7 @@ args = {
         'dim': [15, 15, 100],
         'speed': 1.,
         'collect': False,
-        'goal': None, # [10, 10, 1],
+        'goal': [10, 10, 0],
         'limit': 100,
         'wall_offset': 1., # > 1
         'touch_offset': 2., # > 1
