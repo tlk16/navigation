@@ -92,7 +92,7 @@ args = {
         'dim': [15, 15, 100],
         'speed': 1.,
         'collect': False,
-        'goal': [10, 10, 1],
+        'goal': None, # [10, 10, 1],
         'limit': 100,
         'wall_offset': 1., # > 1
         'touch_offset': 2., # > 1
@@ -198,8 +198,12 @@ def pre_worker(args, png_name):
             session.rat.memory = memory
 
             session.phase = 'test'
+            session.episode(1)
+
             session.rat.pre_phase = 'test'
             session.rat.train()
+
+
             if i % 10 == 0:
                 session.save_png(png_name + '.png', args['rat_args']['train_stage'])
 

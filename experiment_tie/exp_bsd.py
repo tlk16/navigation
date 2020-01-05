@@ -421,12 +421,12 @@ class Session:
             plt.legend(handles=[line1, line2, line3, line4, line5])
         elif phase == 'pre_train':
             line1, = ax2.plot(self.rat.losses, label='loss', color='b')
-            # cum_test_pos = smooth(self.pos_accuracy['test'], 10)
-            # line6, = ax.plot(self.pos_accuracy['test'], label='test_pos', color='g')
-            # line7, = ax.plot(cum_test_pos, label='test_pos_cum', color='r')
+            cum_test_pos = smooth(self.pos_accuracy['test'], 10)
+            line6, = ax.plot(self.pos_accuracy['test'], label='test_pos', color='g')
+            line7, = ax.plot(cum_test_pos, label='test_pos_cum', color='r')
             line8, = ax.plot(self.rat.accuracy['train'], label='train_acc', color='y')
             line9, = ax.plot(self.rat.accuracy['test'],label='test_acc', color='g')
-            plt.legend(handles=[line1, line8, line9])
+            plt.legend(handles=[line1, line8, line6, line7, line9])
         else:
             raise TypeError('phase wrong')
         plt.savefig(filename)
