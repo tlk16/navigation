@@ -165,7 +165,7 @@ def pre_worker(args, png_name):
 
         files = []
         for filename in os.listdir(os.getcwd()):
-            if filename.startswith('memory'):
+            if filename.startswith('mem1024ory'):
                 files.append(filename)
 
         for i in range(30000):
@@ -189,8 +189,9 @@ def pre_worker(args, png_name):
     except Exception as e:
         print(e)
 
-def get_data(q):
+def get_data():
     args['rat_args']['memory_size'] = 10000000  # modify global
+    args['rat_args']['net_hidden_size'] = 1024  # modify global
 
     rat = Rat(**args['rat_args'])
     env = RatEnv(**args['env_args'])
@@ -206,7 +207,7 @@ def get_data(q):
             sequence[k] = sequence[k].to('cpu')
     print('to cpu is ok')
     time.sleep(int(os.getpid() / 100))
-    with open('memory' + str(os.getpid()) + '.pkl', 'wb') as f:
+    with open('mem1024ory' + str(os.getpid()) + '.pkl', 'wb') as f:
         pickle.dump(session.rat.memory, f)
 
 def execute():
@@ -245,27 +246,27 @@ def pre_execute():
 
     :return:
     """
-    # data_pool = multiprocessing.Pool(8)
-    # q = multiprocessing.Manager().Queue()
-    # for i in range(8):
-    #     print(i)
-    #     data_pool.apply_async(get_data, (q,))
-    # data_pool.close()
-    # data_pool.join()
-    # print('ok')
+    data_pool = multiprocessing.Pool(8)
+    for i in range(8):
+        print(i)
+        data_pool.apply_async(get_data)
+    data_pool.close()
+    data_pool.join()
+    print('ok')
 
     pool = multiprocessing.Pool(9)
-    for pre_lr_rate in [1e-3, 1e-4, 1e-5]:
+    for pre_lr_rate in [1e-2, 1e-3, 1e-4]:
         for keep_p in [0.8]:
             for memory_size in [180000]:
-                for batch_size in [50, 100, 200]:
-                    for net_hidden_size in [512]:
+                for batch_size, device in zip([500, 200], ['cuda:0', 'cuda:1']):
+                    for net_hidden_size in [1024]:
                         used_args = deepcopy(args)
                         used_args['rat_args']['keep_p'] = keep_p
                         used_args['rat_args']['pre_lr_rate'] = pre_lr_rate
                         used_args['rat_args']['memory_size'] = memory_size
                         used_args['rat_args']['batch_size'] = batch_size
                         used_args['rat_args']['net_hidden_size'] = net_hidden_size
+                        used_args['rat_args']['device'] = device
                         png_name = 'pre' + \
                                    'lr' + str(pre_lr_rate) + \
                                    'batch' + str(batch_size) + \
