@@ -66,8 +66,10 @@ class Rat():
         self.hidden_state = self.net.initHidden().to(device)
         self.last_action = self._initAction()
         self.sequence = None
-        self.phase = 'train'
+        self.phase = 'train'  # decide epsilon-greedy or not greedy, controlled by session
+        self.pre_phase = 'train'  # decide whehter or train or test in pre_train
         self.losses = []
+        self.accuracy = {'train': [], 'test': []}
 
     def _epsilon_choose_action(self, q_value):
         """
@@ -283,12 +285,23 @@ class Rat():
             loss_pos_layer = torch.nn.CrossEntropyLoss()
             # print(pos_predicts.reshape((-1, pos_predicts.shape[2])).shape)
             loss_pos = loss_pos_layer(pos_predicts.reshape((-1, pos_predicts.shape[2])), pos)
+            if self.pre_phase == 'train':
+                loss_pos.backward()
+                self.optimizer_pos.step()
+                self.losses.append(loss_pos.detach().item())
 
-            loss_pos.backward()
-            self.optimizer_pos.step()
-            self.losses.append(loss_pos.detach().item())
-            print('train accuracy', torch.eq(torch.argmax(pos_predicts.reshape(-1, pos_predicts.shape[2]), 1), pos)
-                  .sum().float().item() / torch.numel(pos))
+                accuracy = torch.eq(torch.argmax(pos_predicts.reshape(-1, pos_predicts.shape[2]), 1), pos)\
+                               .sum().float().item() / torch.numel(pos)
+                print('train accuracy', accuracy)
+                self.accuracy['train'].append(accuracy)
+
+            elif self.pre_phase == 'test':
+                accuracy = torch.eq(torch.argmax(pos_predicts.reshape(-1, pos_predicts.shape[2]), 1), pos) \
+                               .sum().float().item() / torch.numel(pos)
+                print('test accuracy', accuracy)
+                self.accuracy['test'].append(accuracy)
+            else:
+                raise TypeError('pre_phase wrong')
         else:
             raise TypeError('train stage wrong')
 
@@ -408,10 +421,12 @@ class Session:
             plt.legend(handles=[line1, line2, line3, line4, line5])
         elif phase == 'pre_train':
             line1, = ax2.plot(self.rat.losses, label='loss', color='b')
-            cum_test_pos = smooth(self.pos_accuracy['test'], 10)
-            line6, = ax.plot(self.pos_accuracy['test'], label='test_pos', color='g')
-            line7, = ax.plot(cum_test_pos, label='test_pos_cum', color='r')
-            plt.legend(handles=[line1, line6, line7])
+            # cum_test_pos = smooth(self.pos_accuracy['test'], 10)
+            # line6, = ax.plot(self.pos_accuracy['test'], label='test_pos', color='g')
+            # line7, = ax.plot(cum_test_pos, label='test_pos_cum', color='r')
+            line8, = ax.plot(self.rat.accuracy['train'], label='train_acc', color='y')
+            line9, = ax.plot(self.rat.accuracy['test'],label='test_acc', color='g')
+            plt.legend(handles=[line1, line8, line9])
         else:
             raise TypeError('phase wrong')
         plt.savefig(filename)

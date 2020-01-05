@@ -167,11 +167,16 @@ def pre_worker(args, png_name):
         for filename in os.listdir(os.getcwd()):
             if filename.startswith('mem1024ory'):
                 files.append(filename)
+        random.shuffle(files)
+
+        train_files = files[0: int(len(files) * 0.8)]
+        test_files = files[int(len(files) * 0.8): ]
 
         for i in range(30000):
             print(i)
 
-            file = random.choice(files)
+            # train
+            file = random.choice(train_files)
             with open(file, 'rb') as f:
                 memory = pickle.load(f)
             for sequence in memory:
@@ -180,12 +185,24 @@ def pre_worker(args, png_name):
             session.rat.memory = memory
 
             session.phase = 'train'
+            session.rat.pre_phase = 'train'
             session.rat.train()
 
+            # test
+            file = random.choice(test_files)
+            with open(file, 'rb') as f:
+                memory = pickle.load(f)
+            for sequence in memory:
+                for k in sequence:
+                    sequence[k] = sequence[k].to(args['rat_args']['device'])
+            session.rat.memory = memory
+
             session.phase = 'test'
-            session.experiment(epochs=2)
-            if i % 100 == 0:
-                session.save_png(png_name + '.png', phase=args['rat_args']['train_stage'])
+            session.rat.pre_phase = 'test'
+            session.rat.train()
+            if i % 10 == 0:
+                session.save_png(png_name + '.png', args['rat_args']['train_stage'])
+
     except Exception as e:
         print(e)
 
@@ -246,13 +263,13 @@ def pre_execute():
 
     :return:
     """
-    data_pool = multiprocessing.Pool(8)
-    for i in range(8):
-        print(i)
-        data_pool.apply_async(get_data)
-    data_pool.close()
-    data_pool.join()
-    print('ok')
+    # data_pool = multiprocessing.Pool(8)
+    # for i in range(8):
+    #     print(i)
+    #     data_pool.apply_async(get_data)
+    # data_pool.close()
+    # data_pool.join()
+    # print('ok')
 
     pool = multiprocessing.Pool(9)
     for pre_lr_rate in [1e-2, 1e-3, 1e-4]:
