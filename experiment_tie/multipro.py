@@ -103,7 +103,7 @@ args = {
     'train_epochs': 20,  # if train_epochs larger than rat_args batch_size, experience will be somehow wasted
     'test_epochs': 5,
     'n_train': 2000,
-    'show_time': 100, # save fig per _ step
+    'show_time': 500, # save fig per _ step
 
 }
 
@@ -236,13 +236,13 @@ def execute():
 
     :return:
     """
-    pool = multiprocessing.Pool(8)
+    pool = multiprocessing.Pool(12)
 
-    for pre_lr_rate in [1e-3, 1e-4, 1e-5]:
+    for pre_lr_rate in [1e-3, 1e-5]:
         for keep_p in [0.8]:
             for memory_size in [200, 500]:
-                for train_epochs in [10, 20, 50]:
-                    for train_paras in ['two', 'all']:
+                for train_epochs in [10, 50]:
+                    for train_paras in ['all']:
                         for device, batch_size in zip(['cuda:0', 'cuda:1'], [50, 100]):
                             for net_hidden_size in [512, 256]:
                                 used_args = deepcopy(args)
