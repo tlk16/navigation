@@ -374,7 +374,7 @@ class Session:
                 while not done:
                     action, pos_predict = self.rat.act(state)
                     pos_num += 1
-                    if self.area(state[0], grid=self.rat.grid, env_limit=self.env.limit) == np.argmax(pos_predict):
+                    if self.area(state[0], grid=self.rat.grid, env_limit=self.rat.env_limit) == np.argmax(pos_predict):
                         pos_acc += 1
                     state, reward, done, _ = self.env.step(self.rat.int2angle(action))
                     sr += reward
