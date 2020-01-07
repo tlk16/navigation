@@ -204,6 +204,13 @@ class Rat():
                     {'params': self.net.bo, 'lr': self.lr_rate, 'weight_decay': 0},
                 ]
             )
+            optimizer_pos = torch.optim.Adam(
+                [
+                    {'params': self.decoder.h2p, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.decoder.bp, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                ]
+            )
+
         elif self.train_paras == 'all':
             optimizer_q = torch.optim.Adam(
                 [
@@ -216,22 +223,23 @@ class Rat():
                     {'params': self.net.r, 'lr': self.lr_rate, 'weight_decay': 0},
                 ]
             )
+
+            optimizer_pos = torch.optim.Adam(
+                [
+                    {'params': self.net.i2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.a2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.h2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.bh, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.h2o, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.bo, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.r, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.decoder.h2p, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.decoder.bp, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                ]
+            )
+
         else:
             raise TypeError('train paras wrong')
-
-        optimizer_pos = torch.optim.Adam(
-            [
-                {'params': self.net.i2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
-                {'params': self.net.a2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
-                {'params': self.net.h2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
-                {'params': self.net.bh, 'lr': self.pre_lr_rate, 'weight_decay': 0},
-                {'params': self.net.h2o, 'lr': self.pre_lr_rate, 'weight_decay': 0},
-                {'params': self.net.bo, 'lr': self.pre_lr_rate, 'weight_decay': 0},
-                {'params': self.net.r, 'lr': self.pre_lr_rate, 'weight_decay': 0},
-                {'params': self.decoder.h2p, 'lr': self.pre_lr_rate, 'weight_decay': 0},
-                {'params': self.decoder.bp, 'lr': self.pre_lr_rate, 'weight_decay': 0},
-            ]
-        )
 
         return optimizer_q, optimizer_pos
 
