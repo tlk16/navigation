@@ -242,7 +242,7 @@ def execute():
         for keep_p in [0.8]:
             for memory_size in [200, 500]:
                 for train_epochs in [10, 20, 50]:
-                    for batch_size in [50, 100]:
+                    for device, batch_size in zip(['cuda:0', 'cuda:1'], [50, 100]):
                         for net_hidden_size in [512, 256]:
                             used_args = deepcopy(args)
                             used_args['rat_args']['keep_p'] = keep_p
@@ -251,6 +251,7 @@ def execute():
                             used_args['rat_args']['batch_size'] = batch_size
                             used_args['train_epochs'] = train_epochs
                             used_args['rat_args']['net_hidden_size'] = net_hidden_size
+                            used_args['rat_args']['device'] = device
                             png_name = 'pre' + \
                                        'lr' + str(pre_lr_rate) + \
                                        'memory' + str(memory_size) + \
@@ -298,11 +299,4 @@ def pre_execute():
     pool.join()
 
 if __name__ == '__main__':
-    used_args = deepcopy(args)
-    used_args['rat_args']['keep_p'] = 0.8
-    used_args['rat_args']['pre_lr_rate'] = 1e-3
-    used_args['rat_args']['memory_size'] = 1000
-    used_args['rat_args']['batch_size'] = 200
-    used_args['rat_args']['net_hidden_size'] = 1024
-    pre_worker(used_args, 'hh')
-    # pre_execute()
+    execute()
