@@ -137,7 +137,9 @@ class Rat():
 
     def act(self, state):
         net_output = self._update_hidden(state)
-        if self.train_stage == 'pre_train' or self.train_stage == 'pre_train_mem':
+        if self.train_stage == 'pre_train' \
+                or self.train_stage == 'pre_train_mem' \
+                or self.train_stage == 'pre_train_mem_dict':
             action = self._random_act(state)
         elif self.train_stage == 'q_learning':
             action = self._rl_act(net_output)
@@ -334,13 +336,16 @@ class Rat():
             else:
                 raise TypeError('pre_phase wrong')
 
-        elif self.train_stage == 'pre_train_mem':
+        elif self.train_stage == 'pre_train_mem' or self.train_stage == 'pre_train_mem_dict':
             hiddens = torch.stack(hiddens).permute((1, 0, 2))
             mem_predicts = self.mem_decoder.forward_sequence_values(hiddens)
             mem_predicts = torch.stack(mem_predicts).permute((1, 0, 2))
 
             mem = torch.stack([sequence['touches'] for sequence in train_memory]).float()
-            mem = self.touched(mem)
+            if self.train_stage == 'pre_train_mem':
+                mem = self.touched(mem)
+            else:
+                mem = self.will_touch(mem)
 
             loss_mem_layer = torch.nn.CrossEntropyLoss()
             loss_mem = loss_mem_layer(mem_predicts.reshape((-1, mem_predicts.shape[2])), mem)
@@ -402,7 +407,28 @@ class Rat():
         touch = torch.cat((touch, torch.zeros(touch.shape[0], touch.shape[1], 1).to(self.device)), dim=2)
         for sequence in touch:
             for i in range(1, touch.shape[1]):
-                sequence[i] = sequence[i - 1] if torch.max(sequence[i]).data < 1e-3 else sequence[i]
+                if torch.max(sequence[i]).data < 1e-3:
+                    sequence[i] = sequence[i - 1]
+                if torch.max(sequence[i - 1]).data < 1e-3:
+                    sequence[i - 1, 4] = 1
+            if torch.max(sequence[-1]).data < 1e-3:
+                sequence[-1, 4] = 1
+        return torch.max(touch, dim=2)[1].reshape(-1)
+
+    def will_touch(self, touch):
+        """
+
+        :param touch: tensor [batch_size, step_num, 4]
+        :return: tensor [batch_size, step_num, 5]
+        """
+        touch = torch.cat((touch, torch.zeros(touch.shape[0], touch.shape[1], 1).to(self.device)), dim=2)
+        for sequence in touch:
+            for i in range(1, touch.shape[1]):
+                sequence[i - 1] = sequence[i]
+                if torch.max(sequence[i - 1]).data < 1e-3:
+                    sequence[i - 1, 4] = 1
+            if torch.max(sequence[-1]).data < 1e-3:
+                sequence[-1, 4] = 1
         return torch.max(touch, dim=2)[1].reshape(-1)
 
 
@@ -423,11 +449,14 @@ class Session:
 
         pos_acc = 0
         mem_acc = 0
+        mem_pre_acc = 0
         predict_num = 0
         for epoch in range(epochs):
             sum_step = 0
             sr = 0
             touched = 4
+            mem_predicted = 4
+
             while sum_step < self.env.limit:
                 self.rat.reset(init_net=(sum_step == 0), init_sequence=(sum_step == 0), phase=self.phase)
                 state, reward, done, _ = self.env.reset()
@@ -442,6 +471,7 @@ class Session:
 
                 while not done:
                     action, pos_predict, mem_predict = self.rat.act(state)
+
                     if sum_step > 20: # not predict the first 20 steps, because the information is not enough
                         predict_num += 1
                         if self.area(state[0], grid=self.rat.grid, env_limit=self.rat.env_limit) == np.argmax(pos_predict):
@@ -449,6 +479,11 @@ class Session:
                         # print(touched, np.argmax(mem_predict))
                         if touched == np.argmax(mem_predict):
                             mem_acc += 1
+                        if (mem_predicted == np.argmax(state[2])) or \
+                                (np.linalg.norm(state[2]) < 1e-3 and mem_predicted == 4):
+                            mem_pre_acc += 1
+                        # print(mem_predicted, np.argmax(state[2]))
+                    mem_predicted = np.argmax(mem_predict)
                     state, reward, done, _ = self.env.step(self.rat.int2angle(action))
                     sr += reward
                     if np.linalg.norm(state[2]) > 1e-3:
@@ -467,7 +502,12 @@ class Session:
         if self.phase == 'test':
             self.pos_accuracy['test'].append(pos_acc / predict_num)
         if self.phase == 'test':
-            self.mem_accuracy['test'].append(mem_acc / predict_num)
+            if self.rat.train_stage == 'pre_train_mem':
+                self.mem_accuracy['test'].append(mem_acc / predict_num)
+            elif self.rat.train_stage == 'pre_train_mem_dict':
+                self.mem_accuracy['test'].append(mem_pre_acc / predict_num)
+            else:
+                raise TypeError('wrong train_stage')
 
     def experiment(self, epochs):
         # initialize, might take data during test
@@ -504,7 +544,7 @@ class Session:
             line8, = ax.plot(self.rat.accuracy['train'], label='train_acc', color='y')
             line9, = ax.plot(self.rat.accuracy['test'],label='test_acc', color='g')
             plt.legend(handles=[line1, line8, line6, line7, line9])
-        elif phase == 'pre_train_mem':
+        elif phase == 'pre_train_mem' or 'pre_train_mem_dict':
             line1, = ax2.plot(self.rat.losses, label='loss', color='b')
             cum_test_mem = smooth(self.mem_accuracy['test'], 10)
             line6, = ax.plot(self.mem_accuracy['test'], label='test_mem', color='g')

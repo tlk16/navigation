@@ -298,5 +298,6 @@ def pre_execute():
     pool.join()
 
 if __name__ == '__main__':
-    # worker(args, 'hh')
-    execute()
+    args['rat_args']['train_stage'] = 'pre_train_mem_dict'
+    worker(args, 'hh')
+    # execute()

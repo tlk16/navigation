@@ -87,6 +87,7 @@ class FakeRat:
         self.last_action = None
         self.losses = []
         self.mem = np.array([0,0,0,0,1])
+        self.train_stage = 'pre_train_mem_dict'
 
 
     def reset(self, init_net, init_sequence, phase):
@@ -123,6 +124,9 @@ class FakeRat:
         if np.linalg.norm(state[2]) > 0:
             self.mem = np.concatenate((state[2], np.array([0])))
         # print(state[2], self.mem)
+        if self.train_stage == 'pre_train_mem_dict':
+            mem_pre = np.array([0,0,0,1,0])
+            return action, a, mem_pre
         return action, a, self.mem
 
     def area(self, pos, grid, env_limit):
@@ -262,7 +266,12 @@ def test_area():
     touch[1, 2, 3] = 1
     touch[1, 4, 2] = 1
     # print(rat.touched(touch))
-    assert torch.dist(rat.touched(touch).float(), torch.FloatTensor([4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 2, 2, 2, 2, 2, 2])).item() < 1e-3
+    print(rat.touched(touch.to(rat.device)).float())
+    assert torch.dist(rat.touched(touch.to(rat.device)).float(),
+                      torch.FloatTensor([4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 2, 2, 2, 2, 2, 2]).to(rat.device)).item() < 1e-3
+    print(rat.will_touch(touch.to(rat.device)).float())
+    assert torch.dist(rat.will_touch(touch.to(rat.device)).float(),
+                      torch.FloatTensor([4., 4., 4., 4., 4., 4., 4., 4., 4., 4., 4., 3., 4., 2., 4., 4., 4., 4., 4., 4.]).to(rat.device)).item() < 1e-3
 
     env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
                  limit=100, wall_offset=1., touch_offset=2., wall_reward=0, step_reward=0)
