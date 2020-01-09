@@ -82,11 +82,16 @@ class FakeRat:
         pass
         self.goal = np.array(goal)
         self.limit = limit
+        self.grid = 3
+        self.env_limit = 15
         self.last_action = None
         self.losses = []
+        self.mem = np.array([0,0,0,0,1])
 
 
     def reset(self, init_net, init_sequence, phase):
+        if init_sequence:
+            self.mem = np.array([0, 0, 0, 0, 1])
         pass
 
     def remember(self, *args):
@@ -111,10 +116,14 @@ class FakeRat:
             action = 5
         if direction[0] >= 0 and direction[1] <= 0:
             action = 7
-        pos_prediction = int(self.area(state[0], grid=3, env_limit=self.limit))
-        a = np.zeros((3*3))
+        pos_prediction = int(self.area(state[0], grid=self.grid, env_limit=self.env_limit))
+        a = np.zeros((self.grid * self.grid))
         a[pos_prediction] = 1
-        return action, pos_prediction
+
+        if np.linalg.norm(state[2]) > 0:
+            self.mem = np.concatenate((state[2], np.array([0])))
+        # print(state[2], self.mem)
+        return action, a, self.mem
 
     def area(self, pos, grid, env_limit):
         """
@@ -239,6 +248,8 @@ def test_tool():
             assert item > 9
         for item in session.pos_accuracy['test']:
             assert abs(item - 1) < 1e-3
+        for item in session.mem_accuracy['test']:
+            print(item)
 
 
 def test_area():
@@ -247,6 +258,11 @@ def test_area():
     rat.env_limit = 10
     a = torch.FloatTensor([[[3,3], [3,9], [9,2], [9, 9]]]).to(rat.device)
     assert torch.dist(rat.area(a), torch.FloatTensor([0,1,2,3]).to(rat.device)).item() < 1e-3
+    touch = torch.zeros(2, 10, 4)
+    touch[1, 2, 3] = 1
+    touch[1, 4, 2] = 1
+    # print(rat.touched(touch))
+    assert torch.dist(rat.touched(touch).float(), torch.FloatTensor([4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 2, 2, 2, 2, 2, 2])).item() < 1e-3
 
     env = RatEnv(dim=[15, 15, 100], speed=1., collect=False, goal=[10, 10, 1],
                  limit=100, wall_offset=1., touch_offset=2., wall_reward=0, step_reward=0)
@@ -259,7 +275,7 @@ def test_area():
 
 
 # standard tests
-test_rat()
+# test_rat()
 test_area()
 test_tool()
 

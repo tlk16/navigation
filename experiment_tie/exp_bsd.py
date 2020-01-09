@@ -45,9 +45,10 @@ class Rat():
             raise TypeError('input tpye wrong')
 
         self.decoder = Decoder(hidden_size=net_hidden_size, output_size=self.grid ** 2).to(device)
+        self.mem_decoder = Decoder(hidden_size=net_hidden_size, output_size=5).to(device)
         self.lr_rate = lr_rate
         self.pre_lr_rate = pre_lr_rate
-        self.optimizer_q, self.optimizer_pos = self._init_optimizer()
+        self.optimizer_q, self.optimizer_pos, self.optimizer_mem = self._init_optimizer()
 
         self.memory = []
         self.memory_size = memory_size
@@ -136,7 +137,7 @@ class Rat():
 
     def act(self, state):
         net_output = self._update_hidden(state)
-        if self.train_stage == 'pre_train':
+        if self.train_stage == 'pre_train' or self.train_stage == 'pre_train_mem':
             action = self._random_act(state)
         elif self.train_stage == 'q_learning':
             action = self._rl_act(net_output)
@@ -145,8 +146,10 @@ class Rat():
 
         pos_predict = self.decoder(self.hidden_state.to(self.device))\
             .squeeze().detach().cpu().numpy()
+        mem_predict = self.mem_decoder(self.hidden_state.to(self.device))\
+            .squeeze().detach().cpu().numpy()
         self.last_action = action
-        return action, pos_predict
+        return action, pos_predict, mem_predict
 
     def reset(self, init_net, init_sequence, phase):
         """
@@ -210,6 +213,12 @@ class Rat():
                     {'params': self.decoder.bp, 'lr': self.pre_lr_rate, 'weight_decay': 0},
                 ]
             )
+            optimizer_mem = torch.optim.Adam(
+                [
+                    {'params': self.mem_decoder.h2p, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.mem_decoder.bp, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                ]
+            )
 
         elif self.train_paras == 'all':
             optimizer_q = torch.optim.Adam(
@@ -238,10 +247,24 @@ class Rat():
                 ]
             )
 
+            optimizer_mem = torch.optim.Adam(
+                [
+                    {'params': self.net.i2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.a2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.h2h, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.bh, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.h2o, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.bo, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.net.r, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.mem_decoder.h2p, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                    {'params': self.mem_decoder.bp, 'lr': self.pre_lr_rate, 'weight_decay': 0},
+                ]
+            )
+
         else:
             raise TypeError('train paras wrong')
 
-        return optimizer_q, optimizer_pos
+        return optimizer_q, optimizer_pos, optimizer_mem
 
     def train(self):
 
@@ -287,7 +310,7 @@ class Rat():
             hiddens = torch.stack(hiddens).permute((1, 0, 2))
             pos_predicts = self.decoder.forward_sequence_values(hiddens)
             pos_predicts = torch.stack(pos_predicts).permute((1, 0, 2))
-            # print(pos_predicts.shape)
+
             pos = torch.stack([sequence['positions'] for sequence in train_memory]).float()
             pos = self.area(pos).long()
             loss_pos_layer = torch.nn.CrossEntropyLoss()
@@ -310,6 +333,26 @@ class Rat():
                 self.accuracy['test'].append(accuracy)
             else:
                 raise TypeError('pre_phase wrong')
+
+        elif self.train_stage == 'pre_train_mem':
+            hiddens = torch.stack(hiddens).permute((1, 0, 2))
+            mem_predicts = self.mem_decoder.forward_sequence_values(hiddens)
+            mem_predicts = torch.stack(mem_predicts).permute((1, 0, 2))
+
+            mem = torch.stack([sequence['touches'] for sequence in train_memory]).float()
+            mem = self.touched(mem)
+
+            loss_mem_layer = torch.nn.CrossEntropyLoss()
+            loss_mem = loss_mem_layer(mem_predicts.reshape((-1, mem_predicts.shape[2])), mem)
+            loss_mem.backward()
+            self.optimizer_mem.step()
+            self.losses.append(loss_mem.detach().item())
+
+            accuracy = torch.eq(torch.argmax(mem_predicts.reshape(-1, mem_predicts.shape[2]), 1), mem)\
+                           .sum().float().item() / torch.numel(mem)
+            print('train accuracy', accuracy)
+            self.accuracy['train'].append(accuracy)
+
         else:
             raise TypeError('train stage wrong')
 
@@ -350,6 +393,19 @@ class Rat():
         pos = pos.reshape(-1)
         return pos
 
+    def touched(self, touch):
+        """
+
+        :param touch: tensor [batch_size, step_num, 4]
+        :return: tensor [batch_size, step_num, 5]
+        """
+        touch = torch.cat((touch, torch.zeros(touch.shape[0], touch.shape[1], 1)), dim=2)
+        for sequence in touch:
+            for i in range(1, touch.shape[1]):
+                sequence[i] = sequence[i - 1] if torch.max(sequence[i]).data < 1e-3 else sequence[i]
+        return torch.max(touch, dim=2)[1].reshape(-1)
+
+
 
 
 
@@ -361,18 +417,23 @@ class Session:
         self.rewards = {'train':[], 'test':[]}
         self.mean_rewards = {'train':[], 'test':[]}
         self.pos_accuracy = {'train':[], 'test':[]}
+        self.mem_accuracy = {'train': [], 'test': []}
 
     def episode(self, epochs):
 
         pos_acc = 0
-        pos_num = 0
+        mem_acc = 0
+        predict_num = 0
         for epoch in range(epochs):
             sum_step = 0
             sr = 0
+            touched = 4
             while sum_step < self.env.limit:
                 self.rat.reset(init_net=(sum_step == 0), init_sequence=(sum_step == 0), phase=self.phase)
                 state, reward, done, _ = self.env.reset()
                 sr += reward
+                if np.linalg.norm(state[2]) > 1e-3:
+                    touched = np.argmax(state[2])
                 sum_step += 1
                 if self.phase == 'train':
                     self.rat.remember(state, reward, self.rat.last_action, sum_step == self.env.limit)
@@ -380,12 +441,17 @@ class Session:
                     break
 
                 while not done:
-                    action, pos_predict = self.rat.act(state)
-                    pos_num += 1
+                    action, pos_predict, mem_predict = self.rat.act(state)
+                    predict_num += 1
                     if self.area(state[0], grid=self.rat.grid, env_limit=self.rat.env_limit) == np.argmax(pos_predict):
                         pos_acc += 1
+                    # print(touched, np.argmax(mem_predict))
+                    if touched == np.argmax(mem_predict):
+                        mem_acc += 1
                     state, reward, done, _ = self.env.step(self.rat.int2angle(action))
                     sr += reward
+                    if np.linalg.norm(state[2]) > 1e-3:
+                        touched = np.argmax(state[2])
                     sum_step += 1
 
                     if self.phase == 'train':
@@ -398,7 +464,9 @@ class Session:
         self.mean_rewards[self.phase].append(np.array(self.rewards[self.phase]).mean())
         self.rewards = {'train': [], 'test': []}
         if self.phase == 'test':
-            self.pos_accuracy['test'].append(pos_acc / pos_num)
+            self.pos_accuracy['test'].append(pos_acc / predict_num)
+        if self.phase == 'test':
+            self.mem_accuracy['test'].append(mem_acc / predict_num)
 
     def experiment(self, epochs):
         # initialize, might take data during test
@@ -432,6 +500,14 @@ class Session:
             cum_test_pos = smooth(self.pos_accuracy['test'], 10)
             line6, = ax.plot(self.pos_accuracy['test'], label='test_pos', color='g')
             line7, = ax.plot(cum_test_pos, label='test_pos_cum', color='r')
+            line8, = ax.plot(self.rat.accuracy['train'], label='train_acc', color='y')
+            line9, = ax.plot(self.rat.accuracy['test'],label='test_acc', color='g')
+            plt.legend(handles=[line1, line8, line6, line7, line9])
+        elif phase == 'pre_train_mem':
+            line1, = ax2.plot(self.rat.losses, label='loss', color='b')
+            cum_test_mem = smooth(self.mem_accuracy['test'], 10)
+            line6, = ax.plot(self.mem_accuracy['test'], label='test_mem', color='g')
+            line7, = ax.plot(cum_test_mem, label='test_mem_cum', color='r')
             line8, = ax.plot(self.rat.accuracy['train'], label='train_acc', color='y')
             line9, = ax.plot(self.rat.accuracy['test'],label='test_acc', color='g')
             plt.legend(handles=[line1, line8, line6, line7, line9])
