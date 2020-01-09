@@ -442,12 +442,13 @@ class Session:
 
                 while not done:
                     action, pos_predict, mem_predict = self.rat.act(state)
-                    predict_num += 1
-                    if self.area(state[0], grid=self.rat.grid, env_limit=self.rat.env_limit) == np.argmax(pos_predict):
-                        pos_acc += 1
-                    # print(touched, np.argmax(mem_predict))
-                    if touched == np.argmax(mem_predict):
-                        mem_acc += 1
+                    if sum_step > 20: # not predict the first 20 steps, because the information is not enough
+                        predict_num += 1
+                        if self.area(state[0], grid=self.rat.grid, env_limit=self.rat.env_limit) == np.argmax(pos_predict):
+                            pos_acc += 1
+                        # print(touched, np.argmax(mem_predict))
+                        if touched == np.argmax(mem_predict):
+                            mem_acc += 1
                     state, reward, done, _ = self.env.step(self.rat.int2angle(action))
                     sr += reward
                     if np.linalg.norm(state[2]) > 1e-3:

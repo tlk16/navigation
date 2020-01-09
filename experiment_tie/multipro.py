@@ -63,7 +63,7 @@ args = {
     'rat_args':{
         'input_type': 'touch',
         'device': 'cuda:1',
-        'train_stage': 'pre_train_mem',
+        'train_stage': 'pre_train',
 
         # knowledge about environment
         'action_space': 8,
@@ -102,7 +102,7 @@ args = {
     'start': 50,
     'train_epochs': 20,  # if train_epochs larger than rat_args batch_size, experience will be somehow wasted
     'test_epochs': 5,
-    'n_train': 2000,
+    'n_train': 3000,
     'show_time': 100, # save fig per _ step
 
 }
@@ -238,30 +238,25 @@ def execute():
     """
     pool = multiprocessing.Pool(12)
 
-    for pre_lr_rate in [1e-3, 1e-5]:
+    for pre_lr_rate in [1e-4]:
         for keep_p in [0.8]:
-            for memory_size in [200, 500]:
-                for train_epochs in [10, 50]:
+            for memory_size in [300]:
+                for train_epochs in [20]:
                     for train_paras in ['all']:
-                        for device, batch_size in zip(['cuda:0', 'cuda:1'], [50, 100]):
-                            for net_hidden_size in [512, 256]:
-                                used_args = deepcopy(args)
-                                used_args['rat_args']['keep_p'] = keep_p
-                                used_args['rat_args']['pre_lr_rate'] = pre_lr_rate
-                                used_args['rat_args']['memory_size'] = memory_size
-                                used_args['rat_args']['batch_size'] = batch_size
-                                used_args['train_epochs'] = train_epochs
-                                used_args['rat_args']['net_hidden_size'] = net_hidden_size
-                                used_args['rat_args']['device'] = device
-                                used_args['rat_args']['train_paras'] = train_paras
-                                png_name = 'pre' + \
-                                           'lr' + str(pre_lr_rate) + \
-                                           'memory' + str(memory_size) + \
-                                           'epochs' + str(train_epochs) + \
-                                           'batch' + str(batch_size) + \
-                                           'hidden' + str(net_hidden_size) + \
-                                           'train_paras' + train_paras
-                                pool.apply_async(worker, (used_args, png_name))
+                        for grid in [3, 5, 7, 9, 11, 13]:
+                            for batch_size in [100]:
+                                for net_hidden_size in [512]:
+                                    used_args = deepcopy(args)
+                                    used_args['rat_args']['keep_p'] = keep_p
+                                    used_args['rat_args']['pre_lr_rate'] = pre_lr_rate
+                                    used_args['rat_args']['memory_size'] = memory_size
+                                    used_args['rat_args']['batch_size'] = batch_size
+                                    used_args['train_epochs'] = train_epochs
+                                    used_args['rat_args']['net_hidden_size'] = net_hidden_size
+                                    used_args['rat_args']['train_paras'] = train_paras
+                                    png_name = 'pre' + \
+                                               'grid' + str(grid)
+                                    pool.apply_async(worker, (used_args, png_name))
 
     pool.close()
     pool.join()
@@ -302,5 +297,5 @@ def pre_execute():
     pool.join()
 
 if __name__ == '__main__':
-    worker(args, 'hh')
-    # execute()
+    # worker(args, 'hh')
+    execute()
