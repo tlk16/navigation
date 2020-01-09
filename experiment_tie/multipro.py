@@ -254,6 +254,7 @@ def execute():
                                     used_args['train_epochs'] = train_epochs
                                     used_args['rat_args']['net_hidden_size'] = net_hidden_size
                                     used_args['rat_args']['train_paras'] = train_paras
+                                    used_args['rat_args']['grid'] = grid
                                     png_name = 'pre' + \
                                                'grid' + str(grid)
                                     pool.apply_async(worker, (used_args, png_name))
