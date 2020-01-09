@@ -399,7 +399,7 @@ class Rat():
         :param touch: tensor [batch_size, step_num, 4]
         :return: tensor [batch_size, step_num, 5]
         """
-        touch = torch.cat((touch, torch.zeros(touch.shape[0], touch.shape[1], 1)), dim=2)
+        touch = torch.cat((touch, torch.zeros(touch.shape[0], touch.shape[1], 1).to(self.device)), dim=2)
         for sequence in touch:
             for i in range(1, touch.shape[1]):
                 sequence[i] = sequence[i - 1] if torch.max(sequence[i]).data < 1e-3 else sequence[i]

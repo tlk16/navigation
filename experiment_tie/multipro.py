@@ -63,7 +63,7 @@ args = {
     'rat_args':{
         'input_type': 'touch',
         'device': 'cuda:1',
-        'train_stage': 'pre_train',
+        'train_stage': 'pre_train_mem',
 
         # knowledge about environment
         'action_space': 8,
@@ -103,7 +103,7 @@ args = {
     'train_epochs': 20,  # if train_epochs larger than rat_args batch_size, experience will be somehow wasted
     'test_epochs': 5,
     'n_train': 2000,
-    'show_time': 500, # save fig per _ step
+    'show_time': 100, # save fig per _ step
 
 }
 
@@ -302,4 +302,5 @@ def pre_execute():
     pool.join()
 
 if __name__ == '__main__':
-    execute()
+    worker(args, 'hh')
+    # execute()
