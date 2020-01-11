@@ -104,8 +104,8 @@ args = {
     'start': 50,
     'train_epochs': 20,  # if train_epochs larger than rat_args batch_size, experience will be somehow wasted
     'test_epochs': 5,
-    'n_train': 3000,
-    'show_time': 100, # save fig per _ step
+    'n_train': 50000,
+    'show_time': 500, # save fig per _ step
 
 }
 
@@ -245,7 +245,7 @@ def execute():
             for memory_size in [300]:
                 for train_epochs in [20]:
                     for train_paras in ['all']:
-                        for grid in [3, 5, 7, 9, 11, 13]:
+                        for grid in [5, 7, 9, 11, 13]:
                             for batch_size in [100]:
                                 for net_hidden_size in [512]:
                                     used_args = deepcopy(args)
@@ -300,6 +300,9 @@ def pre_execute():
     pool.join()
 
 if __name__ == '__main__':
-    args['rat_args']['train_stage'] = 'pre_train_mem_dict'
-    worker(args, 'hh')
-    # execute()
+    # args['rat_args']['train_stage'] = 'pre_train_mem_dict'
+    # worker(args, 'hh')
+    execute()
+
+    # rewrite session visualize
+    # loss function of grid

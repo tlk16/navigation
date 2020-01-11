@@ -506,8 +506,8 @@ class Session:
                 self.mem_accuracy['test'].append(mem_acc / predict_num)
             elif self.rat.train_stage == 'pre_train_mem_dict':
                 self.mem_accuracy['test'].append(mem_pre_acc / predict_num)
-            else:
-                raise TypeError('wrong train_stage')
+            # else:
+            #     raise TypeError('wrong train_stage')
 
     def experiment(self, epochs):
         # initialize, might take data during test
