@@ -1,6 +1,8 @@
 """
 multi-processing for testing super-parameters
 """
+import sys
+sys.path.append('/home/yons/tlk/navigation')
 import os
 import time
 import random
